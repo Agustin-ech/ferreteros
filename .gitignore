@@ -1,0 +1,19 @@
+# Entorno virtual
+venv/
+.venv/
+env/
+
+# Configuración sensible e instancia local
+.env
+instance/*
+!instance/config.py
+
+# Caché de Python y pruebas
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Configuración de editores
+.vscode/
+.idea/
