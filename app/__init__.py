@@ -12,8 +12,14 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     cors.init_app(app)
 
+    from app.models.usuario import Usuario
+    from app.models.sucursal import Sucursal
+
     # Registro de blueprints (descomentar a medida que los crees)
     # from app.routes.auth_routes import auth_bp
     # app.register_blueprint(auth_bp, url_prefix='/api/auth')
+
+    from app.routes.auth_routes import auth_bp
+    app.register_blueprint(auth_bp)
 
     return app
