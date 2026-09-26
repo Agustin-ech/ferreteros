@@ -14,6 +14,7 @@ class TipoUsuario(db.Model):
     idTipoUsuario = db.Column(db.Integer, primary_key=True, autoincrement=True)
     nombre = db.Column(db.String(50), unique=True, nullable=False)
     descripcion = db.Column(db.String(255), nullable=True)
+    funciones = db.relationship('TipoUsuarioFuncion', back_populates='tipo_usuario')
 
     # --- Columnas de soporte, útiles en cualquier sistema real ---
     activo = db.Column(db.Boolean, default=True, nullable=False)

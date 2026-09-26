@@ -1,6 +1,7 @@
 from flask import Flask
 from app.config import Config
 from app.extensions import db, migrate, jwt, cors
+from app.routes.usuario_routes import usuario_bp
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -17,12 +18,15 @@ def create_app(config_class=Config):
     from app.models.tipo_documento import TipoDeDocumento
     from app.models.tipo_usuario import TipoUsuario
     from app.models.funcion import Funcion
+    from app.models.usuario_tipo_funcion import TipoUsuarioFuncion
 
     # Registro de blueprints (descomentar a medida que los crees)
     # from app.routes.auth_routes import auth_bp
     # app.register_blueprint(auth_bp, url_prefix='/api/auth')
 
     from app.routes.auth_routes import auth_bp
+
     app.register_blueprint(auth_bp)
+    app.register_blueprint(usuario_bp)
 
     return app

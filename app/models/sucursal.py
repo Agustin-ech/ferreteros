@@ -8,6 +8,7 @@ class Sucursal(db.Model):
     idSucursal = db.Column(db.Integer, primary_key=True, autoincrement=True)
     nombreSucursal = db.Column(db.String(100), nullable=False, unique=True)
     direccion = db.Column(db.String(255), nullable=False)
+    telefono = db.Column(db.String(20), nullable=True)
 
     # --- Columnas de soporte ---
     activa = db.Column(db.Boolean, default=True, nullable=False)
@@ -17,23 +18,6 @@ class Sucursal(db.Model):
         nullable=False,
     )
 
-    # ------------------------------------------------------------------
-    # Relaciones
-    # ------------------------------------------------------------------
-    usuarios = db.relationship(
-        "Usuario",
-        back_populates="sucursal",
-        lazy="select",  # carga los usuarios solo cuando se acceden,
-                        # no automáticamente al consultar la sucursal.
-    )
-
-    # A medida que se agreguen los demás modelos (Inventario, Venta,
-    # PedidoProveedor, etc.) cada uno tendrá aquí su relationship
-    # correspondiente, por ejemplo:
-    #
-    # inventarios = db.relationship("Inventario", back_populates="sucursal")
-    # ventas = db.relationship("Venta", back_populates="sucursal")
-    # pedidos_proveedor = db.relationship("PedidoProveedor", back_populates="sucursal")
 
     # ------------------------------------------------------------------
     # Utilidades
@@ -43,8 +27,9 @@ class Sucursal(db.Model):
             "idSucursal": self.idSucursal,
             "nombreSucursal": self.nombreSucursal,
             "direccion": self.direccion,
+            "telefono": self.telefono,
             "activa": self.activa,
         }
 
     def __repr__(self) -> str:
-        return f"<Sucursal {self.idSucursal} - {self.nombreSucursal}>"
+        return f"<Sucursal {self.idSucursal} - {self.nombreSucursal} - {self.direccion} - {self.telefono}>"

@@ -9,6 +9,7 @@ class Funcion(db.Model):
     modulo = db.Column(db.String(10), unique=True, nullable=False)
     nombre = db.Column(db.String(50), unique=True, nullable=False)
     descripcion = db.Column(db.String(200), nullable=True)
+    tipos_usuario = db.relationship('TipoUsuarioFuncion', back_populates='funcion')
 
     # Columnas de soporte, útiles en cualquier sistema real
     activo = db.Column(db.Boolean, default=True, nullable=False)

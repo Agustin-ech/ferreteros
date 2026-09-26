@@ -2,30 +2,21 @@ from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.extensions import db
 
-class RolUsuario:
-    ADMINISTRADOR = "administrador"
-    VENDEDOR = "vendedor"
-    BODEGA = "bodega"
-
-    OPCIONES = (ADMINISTRADOR, VENDEDOR, BODEGA)
-
 class Usuario(db.Model):
     __tablename__ = "usuarios"
 
     # --- Columnas obligatorias solicitadas ---
     idUsuario = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    nombre = db.Column(db.String(150), nullable=False)
-
-    # Se guarda el HASH de la contraseña, nunca el texto plano.
+    idTipoDocumento = db.Column(db.Integer, db.ForeignKey("TipoDeDocumento.idTipoDocumento"), nullable=False)
+    numeroDocumento = db.Column(db.String(20), unique=True, nullable=False)
+    primerNombre = db.Column(db.String(150), nullable=False)
+    segundoNombre = db.Column(db.String(150), nullable=True)
+    primerApellido = db.Column(db.String(150), nullable=False)
+    segundoApellido = db.Column(db.String(150), nullable=True)
+    correoElectronico = db.Column(db.String(150), unique=True, nullable=False)
+    telefono = db.Column(db.String(20), nullable=True)
+    idTipoUsuario = db.Column(db.Integer, db.ForeignKey("TipoUsuario.idTipoUsuario"), nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    rol = db.Column(db.String(20), nullable=False)
-    idSucursal = db.Column(
-        db.Integer,
-        db.ForeignKey("sucursales.idSucursal"),
-        nullable=True,  # nullable=True porque el Administrador puede
-                        # supervisar ambas sucursales sin pertenecer
-                        # exclusivamente a una.
-    )
 
     # --- Columnas de soporte, útiles en cualquier sistema real ---
     activo = db.Column(db.Boolean, default=True, nullable=False)
@@ -34,13 +25,7 @@ class Usuario(db.Model):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
-
-    # --- Relación con Sucursal ---
-    # 'Sucursal' se referencia como string porque ese modelo se define
-    # en otro archivo (app/models/sucursal.py); SQLAlchemy lo resuelve
-    # en tiempo de ejecución sin necesidad de importarlo aquí arriba
-    # (evita importaciones circulares).
-    sucursal = db.relationship("Sucursal", back_populates="usuarios")
+    ultimo_login = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # ------------------------------------------------------------------
     # Métodos para manejar la contraseña de forma segura
@@ -66,11 +51,17 @@ class Usuario(db.Model):
     def to_dict(self) -> dict:
         return {
             "idUsuario": self.idUsuario,
-            "nombre": self.nombre,
-            "rol": self.rol,
-            "idSucursal": self.idSucursal,
+            "primerNombre": self.primerNombre,
+            "segundoNombre": self.segundoNombre,
+            "primerApellido": self.primerApellido,
+            "segundoApellido": self.segundoApellido,
+            "correoElectronico": self.correoElectronico,
+            "telefono": self.telefono,
+            "idTipoUsuario": self.idTipoUsuario,
             "activo": self.activo,
+            "fecha_creacion": self.fecha_creacion.isoformat(),
+            "ultimo_login": self.ultimo_login.isoformat() if self.ultimo_login else None,
         }
 
     def __repr__(self) -> str:
-        return f"<Usuario {self.idUsuario} - {self.nombre} ({self.rol})>"
+        return f"<Usuario {self.idUsuario} - {self.primerNombre} - {self.segundoNombre} - {self.primerApellido} - {self.segundoApellido} - {self.correoElectronico} - {self.telefono} ({self.idTipoUsuario})>"
