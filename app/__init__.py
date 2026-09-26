@@ -16,6 +16,7 @@ def create_app(config_class=Config):
     from app.models.sucursal import Sucursal
     from app.models.tipo_documento import TipoDeDocumento
     from app.models.tipo_usuario import TipoUsuario
+    from app.models.funcion import Funcion
 
     # Registro de blueprints (descomentar a medida que los crees)
     # from app.routes.auth_routes import auth_bp
