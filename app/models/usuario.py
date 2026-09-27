@@ -21,10 +21,10 @@ class Usuario(db.Model):
     # --- Columnas de soporte, útiles en cualquier sistema real ---
     activo = db.Column(db.Boolean, default=True, nullable=False)
     fecha_creacion = db.Column(
-        db.DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
-    )
+            db.DateTime(timezone=True),
+            default=lambda: datetime.now(timezone.utc),
+            nullable=False,
+        )
     ultimo_login = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # --- Relaciones ---

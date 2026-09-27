@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from app.extensions import db
 
 class PedidoProveedor(db.Model):
-    __tablename__ = "pedio_proveedor"
+    __tablename__ = "pedido_proveedor"
 
     idPedidoProveedor = db.Column(db.Integer, primary_key=True, autoincrement=True)
     idProveedor = db.Column(db.Integer, db.ForeignKey("Proveedor.idProveedor"), nullable=False)

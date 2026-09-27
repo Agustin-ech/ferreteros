@@ -14,10 +14,10 @@ class DetalleVenta(db.Model):
 
     activo = db.Column(db.Boolean, default=True, nullable=False)
     fecha_creacion = db.Column(
-        db.DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
-    )
+            db.DateTime(timezone=True),
+            default=lambda: datetime.now(timezone.utc),
+            nullable=False,
+        )
 
     venta = db.relationship("Venta")
     producto = db.relationship("Producto")

@@ -13,10 +13,10 @@ class Sucursal(db.Model):
     # --- Columnas de soporte ---
     activa = db.Column(db.Boolean, default=True, nullable=False)
     fecha_creacion = db.Column(
-        db.DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
-    )
+            db.DateTime(timezone=True),
+            default=lambda: datetime.now(timezone.utc),
+            nullable=False,
+        )
 
     # --- Relaciones ---    
     usuarios = db.relationship('SucursalUsuario', back_populates='sucursal')
