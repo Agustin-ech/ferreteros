@@ -16,6 +16,8 @@ class Factura(db.Model):
         nullable=False,
     )
 
+    venta = db.relationship("Venta")
+    
     def to_dict(self) -> dict:
         return {
             "idFactura": self.idFactura,

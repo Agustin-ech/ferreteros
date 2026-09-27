@@ -28,6 +28,8 @@ class Usuario(db.Model):
     ultimo_login = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # --- Relaciones ---
+    tipo_documento = db.relationship('TipoDeDocumento')
+    tipo_usuario = db.relationship('TipoUsuario')
     sucursales = db.relationship('SucursalUsuario', back_populates='usuario')
 
     # ------------------------------------------------------------------

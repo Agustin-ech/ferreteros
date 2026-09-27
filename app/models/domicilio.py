@@ -20,6 +20,9 @@ class Domicilio(db.Model):
         nullable=False,
     )
 
+    entrega = db.relationship("Entrega")
+    usuario = db.relationship("Usuario")
+
     def to_dict(self) -> dict:
         return {
             "idDomicilio": self.idDomicilio,

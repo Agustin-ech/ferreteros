@@ -23,6 +23,13 @@ class Venta(db.Model):
         nullable=False,
     )
 
+    sucursal = db.relationship("Sucursal")
+    usuario = db.relationship("Usuario")
+    cliente = db.relationship("Cliente")
+    metodo_pago = db.relationship("MetodoPago")
+    tipo_venta = db.relationship("TipoVenta")
+    
+
     def to_dict(self) -> dict:
         return {
             "idVenta": self.idVenta,

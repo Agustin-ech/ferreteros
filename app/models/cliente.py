@@ -23,6 +23,8 @@ class Cliente(db.Model):
         nullable=False,
     )
 
+    tipo_documento = db.relationship('TipoDeDocumento')
+
     def to_dict(self) -> dict:
             return {
                 "idCliente": self.idCliente,

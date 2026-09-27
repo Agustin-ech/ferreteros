@@ -19,6 +19,9 @@ class DetalleVenta(db.Model):
         nullable=False,
     )
 
+    venta = db.relationship("Venta")
+    producto = db.relationship("Producto")
+
     def to_dict(self) -> dict:
         return {
             "idDetalleVenta": self.idDetalleVenta,
