@@ -27,6 +27,9 @@ class Usuario(db.Model):
     )
     ultimo_login = db.Column(db.DateTime(timezone=True), nullable=True)
 
+    # --- Relaciones ---
+    sucursales = db.relationship('SucursalUsuario', back_populates='usuario')
+
     # ------------------------------------------------------------------
     # Métodos para manejar la contraseña de forma segura
     # ------------------------------------------------------------------

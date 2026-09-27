@@ -18,7 +18,9 @@ class Sucursal(db.Model):
         nullable=False,
     )
 
-
+    # --- Relaciones ---    
+    usuarios = db.relationship('SucursalUsuario', back_populates='sucursal')
+    
     # ------------------------------------------------------------------
     # Utilidades
     # ------------------------------------------------------------------
