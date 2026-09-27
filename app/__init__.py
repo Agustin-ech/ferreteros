@@ -23,7 +23,8 @@ def create_app(config_class=Config):
     from app.models.tipo_producto import TipoProducto
     from app.models.producto import Producto
     from app.models.unidad_medida import UnidadMedida
-    
+    from app.models.inventario import Inventario
+
 
     # Registro de blueprints (descomentar a medida que los crees)
     # from app.routes.auth_routes import auth_bp
