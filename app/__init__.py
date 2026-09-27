@@ -32,6 +32,7 @@ def create_app(config_class=Config):
     from app.models.venta import Venta
     from app.models.detalle_venta import DetalleVenta
     from app.models.factura import Factura
+    from app.models.entrega import Entrega
 
     # Registro de blueprints (descomentar a medida que los crees)
     # from app.routes.auth_routes import auth_bp
