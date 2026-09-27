@@ -26,6 +26,7 @@ def create_app(config_class=Config):
     from app.models.inventario import Inventario
     from app.models.tipo_movimiento import TipoMovimiento
     from app.models.ajuste_inventario import AjusteInventario
+    from app.models.cliente import Cliente
 
 
     # Registro de blueprints (descomentar a medida que los crees)
