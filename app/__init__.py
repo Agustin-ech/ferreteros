@@ -28,6 +28,7 @@ def create_app(config_class=Config):
     from app.models.ajuste_inventario import AjusteInventario
     from app.models.cliente import Cliente
     from app.models.metodo_pago import MetodoPago
+    from app.models.tipo_venta import TipoVenta
 
     # Registro de blueprints (descomentar a medida que los crees)
     # from app.routes.auth_routes import auth_bp
