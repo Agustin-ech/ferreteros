@@ -41,6 +41,7 @@ def create_app(config_class=Config):
     from app.models.tipo_devolucion import TipoDevolucion  
     from app.models.devoluciones import Devolucion
     from app.models.detalle_devolucion import DetalleDevolucion
+    from app.models.transaccion_inventario import TransaccionInventario
     # Registro de blueprints (descomentar a medida que los crees)
     # from app.routes.auth_routes import auth_bp
     # app.register_blueprint(auth_bp, url_prefix='/api/auth')
