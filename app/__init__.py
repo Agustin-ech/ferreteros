@@ -37,6 +37,7 @@ def create_app(config_class=Config):
     from app.models.proveedor import Proveedor
     from app.models.pedido_proveedor import PedidoProveedor
     from app.models.estado_pedido_proveedor import EstadoPedidoProveedor
+    from app.models.reclamos_proveedor import ReclamoProveedor
     # Registro de blueprints (descomentar a medida que los crees)
     # from app.routes.auth_routes import auth_bp
     # app.register_blueprint(auth_bp, url_prefix='/api/auth')
