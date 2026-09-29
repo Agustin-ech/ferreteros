@@ -25,6 +25,7 @@ class Producto(db.Model):
 
     tipo_producto = db.relationship('TipoProducto', back_populates='productos')
     unidad_medida = db.relationship('UnidadMedida', back_populates='productos')
+    inventarios = db.relationship('Inventario', back_populates='producto')
 
     def to_dict(self) -> dict:
         return {

@@ -17,7 +17,7 @@ class UnidadMedida(db.Model):
         nullable=False,
     )
 
-    productos = db.relationship('Product', back_populates='unidad_medida')
+    productos = db.relationship('Producto', back_populates='unidad_medida')
 
     def to_dict(self) -> dict:
         return {

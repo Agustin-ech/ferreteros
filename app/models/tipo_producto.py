@@ -17,6 +17,8 @@ class TipoProducto(db.Model):
         nullable=False,
     )
 
+    productos = db.relationship('Producto', back_populates='tipo_producto')
+
     def to_dict(self) -> dict:
         return {
             "idTipoProducto": self.idTipoProducto,

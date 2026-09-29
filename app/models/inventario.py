@@ -16,8 +16,8 @@ class Inventario(db.Model):
             nullable=False,
         )
 
-    producto = db.relationship('Producto', back_populates='inventario')
-    sucursal = db.relationship('Sucursal', back_populates='inventario')
+    producto = db.relationship('Producto', back_populates='inventarios')
+    sucursal = db.relationship('Sucursal', back_populates='inventarios')
 
     def to_dict(self) -> dict:
         return {

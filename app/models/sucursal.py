@@ -20,6 +20,7 @@ class Sucursal(db.Model):
 
     # --- Relaciones ---    
     usuarios = db.relationship('SucursalUsuario', back_populates='sucursal')
+    inventarios = db.relationship('Inventario', back_populates='sucursal')
     
     # ------------------------------------------------------------------
     # Utilidades
