@@ -7,6 +7,7 @@ class Inventario(db.Model):
     idInventario = db.Column(db.Integer, primary_key = True, autoincrement =True)
     CantidadDisponible  = db.Column (db.Numeric(10,2), nullable = False)
     idProducto = db.Column(db.Integer, db.ForeignKey("Producto.idProducto"), nullable=False)
+    idSucursal = db.Column(db.Integer, db.ForeignKey("sucursales.idSucursal"), nullable=False)
 
     activo = db.Column(db.Boolean, default=True, nullable=False)
     fecha_creacion = db.Column(
@@ -16,6 +17,7 @@ class Inventario(db.Model):
         )
 
     producto = db.relationship('Producto', back_populates='inventario')
+    sucursal = db.relationship('Sucursal', back_populates='inventario')
 
     def to_dict(self) -> dict:
         return {
