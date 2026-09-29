@@ -2,17 +2,17 @@ from marshmallow import Schema, fields, validate, validates, ValidationError
 
 class LoginSchema(Schema):
 
-    nombre = fields.Str(
+    primerNombre = fields.Str(
         required=True,
         allow_none=False,
         validate=validate.Length(
             min=1,
             max=150,
-            error="El nombre de usuario debe tener entre 1 y 150 caracteres.",
+            error="El primer nombre debe tener entre 1 y 150 caracteres.",
         ),
         error_messages={
-            "required": "El campo 'nombre' es obligatorio.",
-            "null": "El campo 'nombre' no puede ser nulo.",
+            "required": "El campo 'primerNombre' es obligatorio.",
+            "null": "El campo 'primerNombre' no puede ser nulo.",
         },
     )
 
@@ -31,10 +31,10 @@ class LoginSchema(Schema):
         },
     )
 
-    @validates("nombre")
-    def validar_nombre_no_vacio(self, value, **kwargs):
+    @validates("primerNombre")
+    def validar_primer_nombre_no_vacio(self, value, **kwargs):
         if not value.strip():
-            raise ValidationError("El campo 'nombre' no puede estar vacío.")
+            raise ValidationError("El campo 'primerNombre' no puede estar vacío.")
 
     @validates("password")
     def validar_password_no_vacio(self, value, **kwargs):
@@ -44,9 +44,13 @@ class LoginSchema(Schema):
 
 class UsuarioSchema(Schema):
     idUsuario = fields.Int(dump_only=True)
-    nombre = fields.Str(dump_only=True)
-    rol = fields.Str(dump_only=True)
-    idSucursal = fields.Int(dump_only=True, allow_none=True)
+    primerNombre = fields.Str(dump_only=True)
+    segundoNombre = fields.Str(dump_only=True, allow_none=True)
+    primerApellido = fields.Str(dump_only=True)
+    segundoApellido = fields.Str(dump_only=True, allow_none=True)
+    correoElectronico = fields.Email(dump_only=True)
+    telefono = fields.Str(dump_only=True, allow_none=True)
+    idTipoUsuario = fields.Int(dump_only=True)
     activo = fields.Bool(dump_only=True)
 
 

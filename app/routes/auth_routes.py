@@ -17,11 +17,11 @@ def login():
     except ValidationError as err:
         return jsonify({"errores": err.messages}), 400
 
-    nombre = data_validada["nombre"]
+    primer_nombre = data_validada["primerNombre"]
     password = data_validada["password"]
 
     # 2. Consultar el usuario en la base de datos
-    usuario = Usuario.query.filter_by(nombre=nombre).first()
+    usuario = Usuario.query.filter_by(primerNombre=primer_nombre).first()
 
     # 3. Validar existencia y hash de contraseña
     if not usuario or not usuario.check_password(password):
@@ -31,12 +31,20 @@ def login():
     if not usuario.activo:
         return jsonify({"mensaje": "El usuario se encuentra inactivo"}), 403
 
+    rol = usuario.tipo_usuario.nombre.lower()
+    if rol == "administrador":
+        rol = "admin"
+    id_sucursal = next(
+        (asignacion.idSucursal for asignacion in usuario.sucursales if asignacion.activo),
+        None,
+    )
+
     # 5. Generar token JWT con identity (idUsuario) y claims con rol/sucursal
     access_token = create_access_token(
         identity=str(usuario.idUsuario),
         additional_claims={
-            "rol": usuario.rol,
-            "idSucursal": usuario.idSucursal,
+            "rol": rol,
+            "idSucursal": id_sucursal,
         },
     )
 
