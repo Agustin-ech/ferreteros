@@ -14,27 +14,12 @@ Se asume un decorador `roles_required` en app/utils/auth.py que:
 from datetime import date
 
 from flask import Blueprint, g, jsonify, request
+from marshmallow import ValidationError
 
 from app.services import factura_service, venta_service
+from app.services.factura_service import FacturaError
+from app.services.venta_service import ValidacionError, VentaError
 from app.utils.auth import roles_required
-
-
-class ValidacionError(ValueError):
-    def __init__(self, mensaje, status_code=400):
-        super().__init__(mensaje)
-        self.status_code = status_code
-
-
-class VentaError(Exception):
-    def __init__(self, mensaje, status_code=400):
-        super().__init__(mensaje)
-        self.status_code = status_code
-
-
-class FacturaError(Exception):
-    def __init__(self, mensaje, status_code=400):
-        super().__init__(mensaje)
-        self.status_code = status_code
 
 venta_bp = Blueprint("ventas", __name__, url_prefix="/api/ventas")
 
@@ -45,6 +30,11 @@ venta_bp = Blueprint("ventas", __name__, url_prefix="/api/ventas")
 @venta_bp.errorhandler(VentaError)
 def _error_venta(error):
     return jsonify({"error": str(error)}), error.status_code
+
+
+@venta_bp.errorhandler(ValidationError)
+def _datos_invalidos(error):
+    return jsonify({"error": "Datos inválidos.", "detalles": error.messages}), 400
 
 
 @venta_bp.errorhandler(FacturaError)
@@ -73,6 +63,7 @@ def registrar_venta():
     {
       "cliente_id": 3,
       "sucursal_id": 1,            // solo el admin debe enviarlo
+            "idTipoVenta": 1,
       "medio_pago": "efectivo",    // efectivo | transferencia
       "descuento": 0,              // en pesos, opcional
       "items": [{"producto_id": 10, "cantidad": 2.5}, ...]

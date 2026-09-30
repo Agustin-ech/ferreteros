@@ -55,7 +55,7 @@ def generar_numero_factura(venta):
     varios vendedores simultáneos, ver RFF-04).
     Ejemplo: FV-01-00000042
     """
-    return f"FV-{venta.sucursal_id:02d}-{venta.id:08d}"
+    return f"FV-{venta.idSucursal:02d}-{venta.idVenta:08d}"
 
 
 def crear_factura(venta):
@@ -63,21 +63,23 @@ def crear_factura(venta):
 
     Debe llamarse después de que la venta exista en la sesión (con id).
     """
-    if venta.id is None:
+    if venta.idVenta is None:
         db.session.flush()
 
-    existente = Factura.query.filter_by(venta_id=venta.id).first()
+    existente = Factura.query.filter_by(idVenta=venta.idVenta).first()
     if existente is not None:
-        raise FacturaDuplicadaError(f"La venta {venta.id} ya tiene la factura {existente.numero}.")
+        raise FacturaDuplicadaError(
+            f"La venta {venta.idVenta} ya tiene la factura {existente.numeroFactura}."
+        )
 
     factura = Factura(
-        venta_id=venta.id,
-        numero=generar_numero_factura(venta),
-        fecha=venta.fecha,
-        total=venta.total,
+        idVenta=venta.idVenta,
+        numeroFactura=generar_numero_factura(venta),
+        fechaEmision=venta.fechaHora,
+        valorTotal=venta.total,
     )
     db.session.add(factura)
-    db.session.flush()  # asigna factura.id y hace valer UNIQUE(numero) / UNIQUE(venta_id)
+    db.session.flush()  # Asigna factura.idFactura y valida las restricciones únicas.
     return factura
 
 
@@ -90,46 +92,55 @@ def obtener_factura_por_venta(venta_id, usuario):
     `usuario` es un dict con al menos: id, rol, sucursal_id.
     Un usuario que no es administrador solo ve facturas de su sucursal (RFF-06).
     """
-    factura = Factura.query.filter_by(venta_id=venta_id).first()
+    factura = Factura.query.filter_by(idVenta=venta_id).first()
     if factura is None:
         raise FacturaNoEncontradaError(f"La venta {venta_id} no tiene factura.")
 
     venta = db.session.get(Venta, venta_id)
-    if usuario["rol"] != "admin" and venta.sucursal_id != usuario["sucursal_id"]:
+    if usuario["rol"] != "admin" and venta.idSucursal != usuario["sucursal_id"]:
         raise FacturaAccesoDenegadoError("No tienes acceso a facturas de otra sucursal.")
 
-    cliente = db.session.get(Cliente, venta.cliente_id)
-    sucursal = db.session.get(Sucursal, venta.sucursal_id)
+    cliente = db.session.get(Cliente, venta.idCliente)
+    sucursal = db.session.get(Sucursal, venta.idSucursal)
 
     filas = (
         db.session.query(DetalleVenta, Producto)
-        .join(Producto, Producto.id == DetalleVenta.producto_id)
-        .filter(DetalleVenta.venta_id == venta.id)
-        .order_by(DetalleVenta.id)
+        .join(Producto, Producto.idProducto == DetalleVenta.idProducto)
+        .filter(DetalleVenta.idVenta == venta.idVenta)
+        .order_by(DetalleVenta.idDetalleVenta)
         .all()
     )
 
     return {
         "factura": {
-            "id": factura.id,
-            "numero": factura.numero,
-            "fecha": factura.fecha.isoformat(),
+            "id": factura.idFactura,
+            "numero": factura.numeroFactura,
+            "fecha": factura.fechaEmision.isoformat(),
         },
         "sucursal": {
-            "id": sucursal.id,
-            "nombre": sucursal.nombre,
+            "id": sucursal.idSucursal,
+            "nombre": sucursal.nombreSucursal,
             "direccion": sucursal.direccion,
             "telefono": sucursal.telefono,
         },
         "cliente": {
-            "id": cliente.id,
-            "tipo": cliente.tipo,
-            "nombre": cliente.nombre,
-            "documento": cliente.documento,
+            "id": cliente.idCliente,
+            "tipo_documento": cliente.tipo_documento.nombre,
+            "nombre": " ".join(
+                parte
+                for parte in (
+                    cliente.primerNombre,
+                    cliente.segundoNombre,
+                    cliente.primerApellido,
+                    cliente.segundoApellido,
+                )
+                if parte
+            ),
+            "documento": cliente.numeroDocumento,
         },
         "detalles": [
             {
-                "producto_id": producto.id,
+                "producto_id": producto.idProducto,
                 "producto": producto.nombre,
                 "cantidad": formato_cantidad(detalle.cantidad),
                 "precio_unitario": formato_dinero(detalle.precio_unitario),
@@ -137,8 +148,8 @@ def obtener_factura_por_venta(venta_id, usuario):
             }
             for detalle, producto in filas
         ],
-        "medio_pago": venta.medio_pago,
+        "medio_pago": venta.metodo_pago.nombre,
         "subtotal": formato_dinero(venta.subtotal),
-        "descuento": formato_dinero(venta.descuento),
+        "descuento": formato_dinero(venta.descuentoTotal),
         "total": formato_dinero(venta.total),
     }
