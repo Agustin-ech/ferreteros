@@ -47,8 +47,10 @@ def create_app(config_class=Config):
     # app.register_blueprint(auth_bp, url_prefix='/api/auth')
 
     from app.routes.auth_routes import auth_bp
+    from app.routes.inventario_routes import inventario_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(usuario_bp)
+    app.register_blueprint(inventario_bp)
 
     return app
