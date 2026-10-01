@@ -48,9 +48,11 @@ def create_app(config_class=Config):
 
     from app.routes.auth_routes import auth_bp
     from app.routes.inventario_routes import inventario_bp
+    from app.routes.producto_routes import producto_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(usuario_bp)
     app.register_blueprint(inventario_bp)
+    app.register_blueprint(producto_bp)
 
     return app

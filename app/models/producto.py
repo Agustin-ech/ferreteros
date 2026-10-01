@@ -43,4 +43,4 @@ class Producto(db.Model):
         }
 
     def __repr__(self) -> str:
-        return f"<Product {self.idProduct} - {self.nombre}>"
+        return f"<Producto {self.idProducto} - {self.nombre}>"
