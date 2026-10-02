@@ -16,7 +16,7 @@ class Factura(db.Model):
         nullable=False,
     )
 
-    venta = db.relationship("Venta")
+    venta = db.relationship("Venta", back_populates="factura")
     
     def to_dict(self) -> dict:
         return {

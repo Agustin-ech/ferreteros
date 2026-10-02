@@ -28,6 +28,13 @@ class Venta(db.Model):
     cliente = db.relationship("Cliente")
     metodo_pago = db.relationship("MetodoPago")
     tipo_venta = db.relationship("TipoVenta")
+    detalles = db.relationship(
+        "DetalleVenta",
+        back_populates="venta",
+        cascade="all, delete-orphan",
+        order_by="DetalleVenta.idDetalleVenta",
+    )
+    factura = db.relationship("Factura", back_populates="venta", uselist=False)
 
 
     def to_dict(self) -> dict:

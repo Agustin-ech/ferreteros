@@ -11,347 +11,204 @@ Reglas que implementa:
 
 `usuario` es un dict con: id, rol ('admin' | 'vendedor' | 'bodega'), sucursal_id.
 """
-from datetime import datetime, time, timedelta, timezone
-from decimal import ROUND_HALF_UP, Decimal
+from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
+import uuid
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
-from app.models import (
-    Cliente,
-    DetalleVenta,
-    Inventario,
-    MetodoPago,
-    Producto,
-    Sucursal,
-    TipoVenta,
-    Venta,
-)
-from app.schemas import VentaCrearSchema
-from app.services import factura_service
+from app.models.cliente import Cliente
+from app.models.detalle_venta import DetalleVenta
+from app.models.factura import Factura
+from app.models.inventario import Inventario
+from app.models.metodo_pago import MetodoPago
+from app.models.producto import Producto
+from app.models.tipo_venta import TipoVenta
+from app.models.venta import Venta
 
-DOS_DECIMALES = Decimal("0.01")
-MAX_POR_PAGINA = 100
+class VentaService:
+    CENTAVO = Decimal("0.01")
 
+    @staticmethod
+    def registrar_venta(data_validada, usuario):
+        id_sucursal = data_validada["idSucursal"]
+        if usuario.get("rol") != "admin":
+            sucursal_usuario = usuario.get("sucursal_id")
+            if sucursal_usuario is None or int(sucursal_usuario) != id_sucursal:
+                raise PermissionError("Solo puede registrar ventas en su sucursal asignada.")
 
-# --------------------------------------------------------------------------- #
-# Errores (cada uno lleva el código HTTP con el que la ruta debe responder)
-# --------------------------------------------------------------------------- #
-class VentaError(Exception):
-    status_code = 400
+        try:
+            items = data_validada["detalles"]
+            cantidades_por_producto = {}
+            for item in items:
+                id_producto = item["idProducto"]
+                cantidades_por_producto[id_producto] = (
+                    cantidades_por_producto.get(id_producto, Decimal("0"))
+                    + item["cantidad"]
+                )
 
+            ids_producto = sorted(cantidades_por_producto)
+            productos = db.session.scalars(
+                select(Producto).where(
+                    Producto.idProducto.in_(ids_producto),
+                    Producto.activo.is_(True),
+                )
+            ).all()
+            productos_por_id = {producto.idProducto: producto for producto in productos}
+            for id_producto in ids_producto:
+                if id_producto not in productos_por_id:
+                    raise ValueError(f"El producto con ID {id_producto} no existe o está inactivo.")
 
-class ValidacionError(VentaError):
-    status_code = 400
+            inventarios = db.session.scalars(
+                select(Inventario)
+                .where(
+                    Inventario.idSucursal == id_sucursal,
+                    Inventario.idProducto.in_(ids_producto),
+                    Inventario.activo.is_(True),
+                )
+                .order_by(Inventario.idProducto)
+                .with_for_update()
+            ).all()
+            inventarios_por_producto = {row.idProducto: row for row in inventarios}
+            for id_producto, cantidad in cantidades_por_producto.items():
+                inventario = inventarios_por_producto.get(id_producto)
+                if inventario is None or inventario.CantidadDisponible < cantidad:
+                    producto = productos_por_id[id_producto]
+                    raise ValueError(
+                        f"Stock insuficiente para '{producto.nombre}' en la sucursal {id_sucursal}."
+                    )
 
+            tipo_venta = db.session.get(TipoVenta, data_validada["idTipoVenta"])
+            if not tipo_venta or not tipo_venta.activo:
+                raise ValueError("El tipo de venta no existe o está inactivo.")
 
-class PermisoError(VentaError):
-    status_code = 403
-
-
-class RecursoNoEncontradoError(VentaError):
-    status_code = 404
-
-
-class StockInsuficienteError(VentaError):
-    status_code = 409
-
-
-# --------------------------------------------------------------------------- #
-# Helpers de validación
-# --------------------------------------------------------------------------- #
-def _verificar_acceso_sucursal(sucursal_id, usuario):
-    if usuario["rol"] != "admin" and sucursal_id != usuario["sucursal_id"]:
-        raise PermisoError("No tienes acceso a datos de otra sucursal.")
-
-
-def _normalizar_solicitud(datos, usuario):
-    """Valida el JSON con VentaCrearSchema y aplica las reglas que dependen del usuario.
-
-    Si el JSON es inválido, marshmallow lanza ValidationError; la ruta lo
-    convierte en un 400 con el detalle por campo.
-    """
-    cargado = VentaCrearSchema().load(datos)
-
-    # Sucursal: el admin la elige; los demás roles usan siempre la suya
-    if usuario["rol"] == "admin":
-        if cargado["sucursal_id"] is None:
-            raise ValidacionError("'sucursal_id' es obligatorio para el administrador.")
-        sucursal_id = cargado["sucursal_id"]
-    else:
-        sucursal_id = usuario["sucursal_id"]
-        if cargado["sucursal_id"] is not None and cargado["sucursal_id"] != sucursal_id:
-            raise PermisoError("Solo puedes registrar ventas en tu propia sucursal.")
-
-    # Ítems: si un producto viene repetido, se suman las cantidades
-    items = {}
-    for item in cargado["items"]:
-        producto_id = item["producto_id"]
-        items[producto_id] = items.get(producto_id, Decimal("0")) + item["cantidad"]
-
-    return {
-        "cliente_id": cargado["cliente_id"],
-        "sucursal_id": sucursal_id,
-        "tipo_venta_id": cargado["idTipoVenta"],
-        "medio_pago": cargado["medio_pago"],
-        "descuento": cargado["descuento"],
-        "items": items,  # {producto_id: cantidad}
-    }
-
-
-def _validar_datos_cliente(cliente):
-    nombre = " ".join(
-        parte.strip()
-        for parte in (
-            cliente.primerNombre,
-            cliente.segundoNombre,
-            cliente.primerApellido,
-            cliente.segundoApellido,
-        )
-        if parte and parte.strip()
-    )
-    if not nombre or not (cliente.numeroDocumento or "").strip():
-        raise ValidacionError("El cliente no tiene los datos obligatorios (nombre y documento/NIT).")
-
-
-# --------------------------------------------------------------------------- #
-# Registro de venta (RFF-01 / RFF-04)
-# --------------------------------------------------------------------------- #
-def registrar_venta(datos, usuario):
-    """Registra venta + detalles + descuento de stock + factura en UNA transacción.
-
-    Si cualquier paso falla se hace rollback y la BD queda como estaba antes:
-    sin ventas, detalles ni facturas huérfanos.
-    """
-    solicitud = _normalizar_solicitud(datos, usuario)
-    try:
-        respuesta = _registrar_en_transaccion(solicitud, usuario)
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        raise
-    return respuesta
-
-
-def _registrar_en_transaccion(solicitud, usuario):
-    sucursal_id = solicitud["sucursal_id"]
-
-    sucursal = db.session.get(Sucursal, sucursal_id)
-    if sucursal is None or not sucursal.activa:
-        raise RecursoNoEncontradoError("La sucursal no existe o está inactiva.")
-
-    cliente = db.session.get(Cliente, solicitud["cliente_id"])
-    if cliente is None:
-        raise RecursoNoEncontradoError("El cliente no existe.")
-    _validar_datos_cliente(cliente)
-
-    tipo_venta = db.session.get(TipoVenta, solicitud["tipo_venta_id"])
-    if tipo_venta is None or not tipo_venta.activo:
-        raise RecursoNoEncontradoError("El tipo de venta no existe o está inactivo.")
-
-    metodo_pago = MetodoPago.query.filter(
-        db.func.lower(MetodoPago.nombre) == solicitud["medio_pago"].strip().lower(),
-        MetodoPago.activo.is_(True),
-    ).first()
-    if metodo_pago is None:
-        raise RecursoNoEncontradoError("El método de pago no existe o está inactivo.")
-
-    # Se procesa siempre en orden de producto_id: así dos ventas simultáneas
-    # bloquean las filas en el mismo orden y no se produce un deadlock.
-    ids = sorted(solicitud["items"])
-
-    productos = {
-        producto.idProducto: producto
-        for producto in Producto.query.filter(Producto.idProducto.in_(ids)).all()
-    }
-    no_existen = [i for i in ids if i not in productos]
-    if no_existen:
-        raise RecursoNoEncontradoError(f"Productos inexistentes: {no_existen}.")
-
-    inventarios = {
-        inv.idProducto: inv
-        for inv in (
-            Inventario.query.filter(
-                Inventario.idSucursal == sucursal_id,
-                Inventario.idProducto.in_(ids),
-                Inventario.activo.is_(True),
+            nombre_metodo_pago = data_validada["metodoPago"].strip().lower()
+            metodo_pago = db.session.scalar(
+                select(MetodoPago).where(func.lower(MetodoPago.nombre) == nombre_metodo_pago)
             )
-            .order_by(Inventario.idProducto)
-            .with_for_update()  # bloquea las filas hasta el commit/rollback
-            .all()
-        )
-    }
+            if not metodo_pago or not metodo_pago.activo:
+                raise ValueError("El método de pago no existe o está inactivo.")
 
-    # Validar stock de TODOS los ítems antes de tocar nada
-    faltas = []
-    for producto_id in ids:
-        cantidad = solicitud["items"][producto_id]
-        inventario = inventarios.get(producto_id)
-        disponible = (
-            Decimal(str(inventario.CantidadDisponible))
-            if inventario is not None
-            else Decimal("0")
-        )
-        if inventario is None or disponible < cantidad:
-            faltas.append(
-                f"{productos[producto_id].nombre} "
-                f"(disponible: {factura_service.formato_cantidad(disponible)}, "
-                f"solicitado: {factura_service.formato_cantidad(cantidad)})"
+            id_cliente = data_validada.get("idCliente")
+            if id_cliente is not None:
+                cliente = db.session.get(Cliente, id_cliente)
+                if not cliente or not cliente.activo:
+                    raise ValueError("El cliente no existe o está inactivo.")
+
+            detalles_calculados = []
+            subtotal_venta = Decimal("0.00")
+            for item in items:
+                producto = productos_por_id[item["idProducto"]]
+                cantidad = item["cantidad"]
+                subtotal = (producto.precio * cantidad).quantize(
+                    VentaService.CENTAVO,
+                    rounding=ROUND_HALF_UP,
+                )
+                subtotal_venta += subtotal
+                detalles_calculados.append({
+                    "idProducto": producto.idProducto,
+                    "cantidad": cantidad,
+                    "precio_unitario": producto.precio,
+                    "subtotal": subtotal,
+                })
+
+            descuento = data_validada["descuento"].quantize(
+                VentaService.CENTAVO,
+                rounding=ROUND_HALF_UP,
             )
-    if faltas:
-        raise StockInsuficienteError("Stock insuficiente para: " + "; ".join(faltas) + ".")
+            if descuento > subtotal_venta:
+                raise ValueError("El descuento no puede ser mayor al total de la venta.")
 
-    # Calcular líneas y totales con precios de la BD (nunca los del cliente HTTP)
-    lineas = []
-    subtotal_venta = Decimal("0.00")
-    for producto_id in ids:
-        producto = productos[producto_id]
-        if not getattr(producto, "activo", True):
-            raise ValidacionError(f"El producto '{producto.nombre}' está inactivo.")
-        precio = Decimal(str(producto.precio)).quantize(DOS_DECIMALES, ROUND_HALF_UP)
-        if precio <= 0:
-            raise ValidacionError(f"El producto '{producto.nombre}' no tiene un precio válido.")
-        cantidad = solicitud["items"][producto_id]
-        subtotal = (cantidad * precio).quantize(DOS_DECIMALES, ROUND_HALF_UP)
-        lineas.append((producto_id, cantidad, precio, subtotal))
-        subtotal_venta += subtotal
+            total_final = subtotal_venta - descuento
+            nueva_venta = Venta(
+                idCliente=id_cliente,
+                idSucursal=id_sucursal,
+                idUsuario=usuario["id"],
+                idTipoVenta=tipo_venta.idTipoVenta,
+                idMetodoPago=metodo_pago.idMetodoPago,
+                subtotal=subtotal_venta,
+                descuentoTotal=descuento,
+                total=total_final,
+            )
+            db.session.add(nueva_venta)
+            db.session.flush()
 
-    descuento = solicitud["descuento"]
-    if descuento > subtotal_venta:
-        raise ValidacionError("El descuento no puede ser mayor que el subtotal de la venta.")
-    total = subtotal_venta - descuento
+            for detalle in detalles_calculados:
+                nueva_venta.detalles.append(
+                    DetalleVenta(
+                        idProducto=detalle["idProducto"],
+                        cantidad=detalle["cantidad"],
+                        precio_unitario=detalle["precio_unitario"],
+                        descuento=Decimal("0.00"),
+                        subtotal=detalle["subtotal"],
+                    )
+                )
 
-    # Persistir venta -> detalles -> stock -> factura (todo sin commit)
-    venta = Venta(
-        idCliente=cliente.idCliente,
-        idSucursal=sucursal_id,
-        idUsuario=usuario["id"],
-        idTipoVenta=tipo_venta.idTipoVenta,
-        idMetodoPago=metodo_pago.idMetodoPago,
-        fechaHora=datetime.now(timezone.utc),
-        subtotal=subtotal_venta,
-        descuentoTotal=descuento,
-        total=total,
-    )
-    db.session.add(venta)
-    db.session.flush()  # Obtiene venta.idVenta.
+            for id_producto, cantidad in cantidades_por_producto.items():
+                inventarios_por_producto[id_producto].CantidadDisponible -= cantidad
 
-    for producto_id, cantidad, precio, subtotal in lineas:
-        db.session.add(
-            DetalleVenta(
-                idVenta=venta.idVenta,
-                idProducto=producto_id,
-                cantidad=cantidad,
-                precio_unitario=precio,
-                descuento=Decimal("0.00"),
-                subtotal=subtotal,
+            nueva_venta.factura = VentaService.generar_factura(nueva_venta)
+            db.session.commit()
+            return nueva_venta
+        except Exception:
+            db.session.rollback()
+            raise
+
+    @staticmethod
+    def generar_factura(venta):
+        return Factura(
+            numeroFactura=f"FAC-{uuid.uuid4().hex[:8].upper()}",
+            fechaEmision=datetime.now(timezone.utc),
+            valorTotal=venta.total,
+        )
+
+    @staticmethod
+    def listar_ventas(usuario, filtros, pagina, por_pagina):
+        consulta = VentaService._consulta_visible(usuario)
+        if filtros.get("idSucursal") is not None:
+            consulta = consulta.where(Venta.idSucursal == filtros["idSucursal"])
+        if filtros.get("idCliente") is not None:
+            consulta = consulta.where(Venta.idCliente == filtros["idCliente"])
+        if filtros.get("desde") is not None:
+            consulta = consulta.where(Venta.fechaHora >= filtros["desde"])
+        if filtros.get("hasta") is not None:
+            consulta = consulta.where(Venta.fechaHora < filtros["hasta"])
+
+        total = db.session.scalar(select(func.count()).select_from(consulta.subquery())) or 0
+        ventas = db.session.scalars(
+            consulta.options(
+                selectinload(Venta.detalles).joinedload(DetalleVenta.producto),
+                joinedload(Venta.factura),
+            )
+            .order_by(Venta.fechaHora.desc(), Venta.idVenta.desc())
+            .offset((pagina - 1) * por_pagina)
+            .limit(por_pagina)
+        ).all()
+        return ventas, total
+
+    @staticmethod
+    def obtener_venta(id_venta, usuario):
+        consulta = VentaService._consulta_visible(usuario).where(Venta.idVenta == id_venta)
+        return db.session.scalar(
+            consulta.options(
+                selectinload(Venta.detalles).joinedload(DetalleVenta.producto),
+                joinedload(Venta.factura),
             )
         )
-        inventario = inventarios[producto_id]
-        inventario.CantidadDisponible = Decimal(str(inventario.CantidadDisponible)) - cantidad
-        # RFF-02: aquí puedes disparar la verificación de stock crítico
-        # (si inventario.CantidadDisponible <= 5, actualizar la alerta sin duplicarla).
 
-    factura = factura_service.crear_factura(venta)
+    @staticmethod
+    def obtener_factura(id_venta, usuario):
+        venta = VentaService.obtener_venta(id_venta, usuario)
+        return venta.factura if venta else None
 
-    dinero = factura_service.formato_dinero
-    return {
-        "venta": {
-            "id": venta.idVenta,
-            "fecha": venta.fechaHora.isoformat(),
-            "cliente_id": venta.idCliente,
-            "sucursal_id": venta.idSucursal,
-            "usuario_id": venta.idUsuario,
-            "medio_pago": metodo_pago.nombre,
-            "subtotal": dinero(subtotal_venta),
-            "descuento": dinero(descuento),
-            "total": dinero(total),
-        },
-        "detalles": [
-            {
-                "producto_id": producto_id,
-                "cantidad": factura_service.formato_cantidad(cantidad),
-                "precio_unitario": dinero(precio),
-                "subtotal": dinero(subtotal),
-            }
-            for producto_id, cantidad, precio, subtotal in lineas
-        ],
-        "factura": {"id": factura.idFactura, "numero": factura.numeroFactura},
-    }
-
-
-# --------------------------------------------------------------------------- #
-# Consultas
-# --------------------------------------------------------------------------- #
-def _venta_a_dict(venta):
-    dinero = factura_service.formato_dinero
-    return {
-        "id": venta.idVenta,
-        "fecha": venta.fechaHora.isoformat(),
-        "cliente_id": venta.idCliente,
-        "sucursal_id": venta.idSucursal,
-        "usuario_id": venta.idUsuario,
-        "medio_pago": venta.metodo_pago.nombre,
-        "subtotal": dinero(venta.subtotal),
-        "descuento": dinero(venta.descuentoTotal),
-        "total": dinero(venta.total),
-    }
-
-
-def listar_ventas(usuario, sucursal_id=None, cliente_id=None, desde=None, hasta=None, pagina=1, por_pagina=20):
-    """Lista paginada. `desde` y `hasta` son objetos date (hasta es inclusivo).
-
-    Un no-admin siempre ve solo su sucursal, aunque envíe otro sucursal_id.
-    """
-    consulta = Venta.query
-
-    if usuario["rol"] != "admin":
-        consulta = consulta.filter(Venta.idSucursal == usuario["sucursal_id"])
-    elif sucursal_id is not None:
-        consulta = consulta.filter(Venta.idSucursal == sucursal_id)
-
-    if cliente_id is not None:
-        consulta = consulta.filter(Venta.idCliente == cliente_id)
-    if desde is not None:
-        consulta = consulta.filter(Venta.fechaHora >= datetime.combine(desde, time.min, tzinfo=timezone.utc))
-    if hasta is not None:
-        siguiente = datetime.combine(hasta + timedelta(days=1), time.min, tzinfo=timezone.utc)
-        consulta = consulta.filter(Venta.fechaHora < siguiente)
-
-    pagina = max(pagina, 1)
-    por_pagina = min(max(por_pagina, 1), MAX_POR_PAGINA)
-    resultado = consulta.order_by(Venta.fechaHora.desc()).paginate(page=pagina, per_page=por_pagina, error_out=False)
-
-    return {
-        "items": [_venta_a_dict(v) for v in resultado.items],
-        "pagina": resultado.page,
-        "por_pagina": resultado.per_page,
-        "total": resultado.total,
-        "paginas": resultado.pages,
-    }
-
-
-def obtener_venta(venta_id, usuario):
-    venta = db.session.get(Venta, venta_id)
-    if venta is None:
-        raise RecursoNoEncontradoError("La venta no existe.")
-    _verificar_acceso_sucursal(venta.idSucursal, usuario)
-
-    filas = (
-        db.session.query(DetalleVenta, Producto)
-        .join(Producto, Producto.idProducto == DetalleVenta.idProducto)
-        .filter(DetalleVenta.idVenta == venta.idVenta)
-        .order_by(DetalleVenta.idDetalleVenta)
-        .all()
-    )
-
-    resultado = _venta_a_dict(venta)
-    resultado["detalles"] = [
-        {
-            "producto_id": producto.idProducto,
-            "producto": producto.nombre,
-            "cantidad": factura_service.formato_cantidad(detalle.cantidad),
-            "precio_unitario": factura_service.formato_dinero(detalle.precio_unitario),
-            "subtotal": factura_service.formato_dinero(detalle.subtotal),
-        }
-        for detalle, producto in filas
-    ]
-    return resultado
+    @staticmethod
+    def _consulta_visible(usuario):
+        consulta = select(Venta)
+        if usuario.get("rol") != "admin":
+            sucursal_usuario = usuario.get("sucursal_id")
+            if sucursal_usuario is None:
+                return consulta.where(Venta.idVenta == -1)
+            consulta = consulta.where(Venta.idSucursal == int(sucursal_usuario))
+        return consulta

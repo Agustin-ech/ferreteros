@@ -19,7 +19,7 @@ class DetalleVenta(db.Model):
             nullable=False,
         )
 
-    venta = db.relationship("Venta")
+    venta = db.relationship("Venta", back_populates="detalles")
     producto = db.relationship("Producto")
 
     def to_dict(self) -> dict:
