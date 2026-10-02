@@ -1,22 +1,72 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
-from app.utils.decorators import requiere_rol 
+from marshmallow import ValidationError
+from sqlalchemy.orm import joinedload
 
-inventario_bp = Blueprint("inventario", __name__, url_prefix="/api/inventario")
+from app.models.inventario import Inventario
+from app.schemas.inventario_schema import (
+    ajuste_inventario_schema,
+    inventarios_schema,
+    inventario_schema,
+)
+from app.services.inventario_service import InventarioService
+from app.utils.decorators import requiere_rol
 
-@inventario_bp.route("/ajustar", methods=["POST"])
-@jwt_required() # 1. Primero verifica que el usuario esté logueado y el token sea válido
-@requiere_rol("admin") # 2. Luego verifica que el claim 'rol' sea "admin"
-def ajustar_inventario():
-    # Aquí iría tu lógica para ajustar el inventario...
-    
-    return jsonify({
-        "mensaje": "Acceso concedido al administrador. Inventario ajustado correctamente."
-    }), 200
+inventario_bp = Blueprint('inventario_bp', __name__, url_prefix='/api/inventario')
 
-# Ejemplo de otra ruta que podrían usar múltiples roles
-@inventario_bp.route("/ver", methods=["GET"])
+# a. GET /api/inventario?sucursal=<id> (Consultar existencias)
+@inventario_bp.route('', methods=['GET'])
 @jwt_required()
-@requiere_rol("admin", "vendedor", "supervisor") 
-def ver_inventario():
-    return jsonify({"mensaje": "Lista de inventario..."}), 200
+def consultar_existencias():
+    # Obtener el parámetro de la URL si existe
+    id_sucursal = request.args.get('sucursal', type=int)
+    if request.args.get('sucursal') is not None and id_sucursal is None:
+        return jsonify({"mensaje": "El parámetro sucursal debe ser un entero."}), 400
+
+    consulta = Inventario.query.options(joinedload(Inventario.producto))
+    if id_sucursal:
+        consulta = consulta.filter_by(idSucursal=id_sucursal)
+    inventarios = consulta.all()
+
+    resultados = inventarios_schema.dump(inventarios)
+
+    # Inyectar el indicador visual del semáforo al vuelo (sin guardarlo en DB)
+    for item in resultados:
+        item['semaforo'] = InventarioService.calcular_nivel_semaforo(item['cantidadDisponible'])
+
+    return jsonify(resultados), 200
+
+
+# b. POST /api/inventario/ajustar (Administrador)
+@inventario_bp.route('/ajustar', methods=['POST'])
+@jwt_required()
+@requiere_rol('admin')  # Verificación estricta del claim
+def ajustar_inventario():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"mensaje": "El cuerpo debe ser un objeto JSON válido."}), 400
+
+    try:
+        data = ajuste_inventario_schema.load(data)
+    except ValidationError as error:
+        return jsonify({"mensaje": "Datos de ajuste inválidos.", "errores": error.messages}), 400
+
+    try:
+        nuevo_registro = InventarioService.actualizar_existencias(
+            id_producto=data['idProducto'],
+            id_sucursal=data['idSucursal'],
+            cantidad=data['cantidad'],
+            operacion=data['operacion']
+        )
+
+        resultado = inventario_schema.dump(nuevo_registro)
+        resultado['semaforo'] = InventarioService.calcular_nivel_semaforo(nuevo_registro.CantidadDisponible)
+
+        return jsonify({
+            "mensaje": "Ajuste de inventario realizado con éxito.",
+            "inventario_actualizado": resultado
+        }), 200
+
+    except ValueError as e:
+        # Atrapa los errores lanzados por el InventarioService (ej. Stock insuficiente)
+        return jsonify({"mensaje": str(e)}), 400
