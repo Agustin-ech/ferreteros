@@ -129,8 +129,8 @@ class MercanciaDanada(db.Model):
             name="ck_estado_mercancia_danada",
         ),
         db.CheckConstraint("cantidad > 0", name="ck_cantidad_mercancia_danada"),
-        db.CheckConstraint("costoUnitario >= 0", name="ck_costo_mercancia_danada"),
-        db.CheckConstraint("valorPerdida >= 0", name="ck_valor_mercancia_danada"),
+        db.CheckConstraint('"costoUnitario" >= 0', name='ck_costo_mercancia_danada'),
+        db.CheckConstraint('"valorPerdida" >= 0', name="ck_valor_mercancia_danada"),
         db.Index("ix_mercancia_danada_sucursal_fecha", "idSucursal", "fecha"),
         db.Index("ix_mercancia_danada_producto", "idProducto"),
     )
