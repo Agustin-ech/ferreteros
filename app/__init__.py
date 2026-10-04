@@ -50,11 +50,15 @@ def create_app(config_class=Config):
     from app.routes.inventario_routes import inventario_bp
     from app.routes.producto_routes import producto_bp
     from app.routes.venta_routes import venta_bp
+    from app.routes.reporte_routes import reportes_bp
+    from app.errors.reportes import registrar_handlers
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(usuario_bp)
     app.register_blueprint(inventario_bp)
     app.register_blueprint(producto_bp)
     app.register_blueprint(venta_bp)
+    app.register_blueprint(reportes_bp)
+    registrar_handlers(app)
 
     return app
