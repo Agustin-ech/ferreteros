@@ -70,6 +70,7 @@ class VentaOutputSchema(Schema):
     fechaHora = fields.DateTime()
     subtotal = fields.Float()
     descuento = fields.Float(attribute="descuentoTotal")
+    costoEnvio = fields.Float()
     total = fields.Float()
     detalles = fields.List(fields.Nested(DetalleVentaOutputSchema))
     factura = fields.Nested(FacturaOutputSchema, dump_only=True)

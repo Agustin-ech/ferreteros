@@ -55,6 +55,7 @@ def create_app(config_class=Config):
     from app.routes.reporte_routes import reportes_bp
     from app.errors.reportes import registrar_handlers
     from app.routes.devolucion_routes import devolucion_bp
+    from app.routes.domicilio_routes import domicilio_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(usuario_bp)
@@ -63,6 +64,7 @@ def create_app(config_class=Config):
     app.register_blueprint(venta_bp)
     app.register_blueprint(reportes_bp)
     app.register_blueprint(devolucion_bp)
+    app.register_blueprint(domicilio_bp)
     registrar_handlers(app)
 
     return app

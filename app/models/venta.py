@@ -14,6 +14,7 @@ class Venta(db.Model):
     fechaHora= db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     subtotal= db.Column(db.Numeric(12,2), nullable=False)
     descuentoTotal= db.Column(db.Numeric(12,2), nullable=False)
+    costoEnvio= db.Column(db.Numeric(12,2), nullable=False, default=0)
     total= db.Column(db.Numeric(12,2), nullable=False)
 
     activo = db.Column(db.Boolean, default=True, nullable=False)
@@ -22,6 +23,13 @@ class Venta(db.Model):
             default=lambda: datetime.now(timezone.utc),
             nullable=False,
         )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            '"total" = "subtotal" - "descuentoTotal" + "costoEnvio"',
+            name="ck_venta_total_coherente",
+        ),
+    )
 
     sucursal = db.relationship("Sucursal")
     usuario = db.relationship("Usuario")
@@ -48,6 +56,7 @@ class Venta(db.Model):
             "fechaHora": self.fechaHora.isoformat(),
             "subtotal": float(self.subtotal),
             "descuentoTotal": float(self.descuentoTotal),
+            "costoEnvio": float(self.costoEnvio),
             "total": float(self.total),
             "activo": self.activo,
             "fecha_creacion": self.fecha_creacion.isoformat(),

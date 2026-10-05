@@ -32,7 +32,7 @@ class VentaService:
     CENTAVO = Decimal("0.01")
 
     @staticmethod
-    def registrar_venta(data_validada, usuario):
+    def registrar_venta(data_validada, usuario, *, confirmar=True, cargo_adicional=Decimal("0.00")):
         id_sucursal = data_validada["idSucursal"]
         if usuario.get("rol") != "admin":
             sucursal_usuario = usuario.get("sucursal_id")
@@ -121,7 +121,13 @@ class VentaService:
             if descuento > subtotal_venta:
                 raise ValueError("El descuento no puede ser mayor al total de la venta.")
 
-            total_final = subtotal_venta - descuento
+            cargo_adicional = Decimal(str(cargo_adicional)).quantize(
+                VentaService.CENTAVO,
+                rounding=ROUND_HALF_UP,
+            )
+            if not cargo_adicional.is_finite() or cargo_adicional < 0:
+                raise ValueError("El cargo adicional debe ser un monto válido y no negativo.")
+            total_final = subtotal_venta - descuento + cargo_adicional
             nueva_venta = Venta(
                 idCliente=id_cliente,
                 idSucursal=id_sucursal,
@@ -130,6 +136,7 @@ class VentaService:
                 idMetodoPago=metodo_pago.idMetodoPago,
                 subtotal=subtotal_venta,
                 descuentoTotal=descuento,
+                costoEnvio=cargo_adicional,
                 total=total_final,
             )
             db.session.add(nueva_venta)
@@ -150,7 +157,10 @@ class VentaService:
                 inventarios_por_producto[id_producto].CantidadDisponible -= cantidad
 
             nueva_venta.factura = VentaService.generar_factura(nueva_venta)
-            db.session.commit()
+            if confirmar:
+                db.session.commit()
+            else:
+                db.session.flush()
             return nueva_venta
         except Exception:
             db.session.rollback()

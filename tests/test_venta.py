@@ -86,6 +86,7 @@ def test_registrar_venta_persiste_modelos_y_descuenta_stock(app):
 		assert venta.subtotal == Decimal("15.15")
 		assert venta.descuentoTotal == Decimal("1.15")
 		assert venta.total == Decimal("14.00")
+		assert venta.costoEnvio == Decimal("0.00")
 		assert len(venta.detalles) == 1
 		assert venta.detalles[0].precio_unitario == Decimal("10.10")
 		assert venta.detalles[0].descuento == Decimal("0.00")
