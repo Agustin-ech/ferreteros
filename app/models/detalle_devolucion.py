@@ -13,9 +13,6 @@ class DetalleDevolucion(db.Model):
     productoApto = db.Column(db.Boolean, nullable=False, default=True)  # True = Apto para reventa, False = Dañado
     montoDevuelto = db.Column(db.Numeric(12, 2), nullable=False)
 
-    devolucion = db.relationship('Devolucion')
-    detalle_venta = db.relationship('DetalleVenta')
-    producto = db.relationship('Producto')
     activo = db.Column(db.Boolean, default=True, nullable=False)
     fecha_creacion = db.Column(
             db.DateTime(timezone=True),
@@ -23,9 +20,9 @@ class DetalleDevolucion(db.Model):
             nullable=False,
         )
 
-    producto = db.relationship('Producto')
-    devolucion = db.relationship('Devolucion')
-    detalle_venta = db.relationship('DetalleVenta')
+    devolucion = db.relationship("Devolucion", back_populates="detalles")
+    detalle_venta = db.relationship("DetalleVenta")
+    producto = db.relationship("Producto")
 
     def to_dict(self) -> dict:
         return {

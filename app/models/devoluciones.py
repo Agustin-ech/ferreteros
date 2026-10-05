@@ -19,9 +19,15 @@ class Devolucion(db.Model):
         nullable=False,
     )
 
-    factura = db.relationship('Factura')
-    usuario = db.relationship('Usuario')
-    tipo_devolucion = db.relationship('TipoDevolucion')
+    factura = db.relationship("Factura")
+    usuario = db.relationship("Usuario")
+    tipo_devolucion = db.relationship("TipoDevolucion")
+    detalles = db.relationship(
+        "DetalleDevolucion",
+        back_populates="devolucion",
+        cascade="all, delete-orphan",
+        order_by="DetalleDevolucion.idDetalleDevolucion",
+    )
 
     def to_dict(self) -> dict:
         return {
