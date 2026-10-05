@@ -8,6 +8,7 @@ class Sucursal(db.Model):
     idSucursal = db.Column(db.Integer, primary_key=True, autoincrement=True)
     nombreSucursal = db.Column(db.String(100), nullable=False, unique=True)
     direccion = db.Column(db.String(255), nullable=False)
+    barrio = db.Column(db.String(50), nullable=True)
     telefono = db.Column(db.String(20), nullable=True)
 
     # --- Columnas de soporte ---
@@ -30,9 +31,10 @@ class Sucursal(db.Model):
             "idSucursal": self.idSucursal,
             "nombreSucursal": self.nombreSucursal,
             "direccion": self.direccion,
+            "barrio": self.barrio,
             "telefono": self.telefono,
             "activa": self.activa,
         }
 
     def __repr__(self) -> str:
-        return f"<Sucursal {self.idSucursal} - {self.nombreSucursal} - {self.direccion} - {self.telefono}>"
+        return f"<Sucursal {self.idSucursal} - {self.nombreSucursal} - {self.direccion} - {self.barrio} - {self.telefono}>"
