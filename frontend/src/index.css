@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  background-color: #141414;
+}
+
+/* Scrollbar discreto para tablas con overflow */
+.scroll-thin::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background-color: #333333;
+  border-radius: 999px;
+}
+
+/* Impresión: al usar window.print() (botón "Imprimir" de una factura, o
+   "Exportar PDF" de un reporte), ocultamos todo excepto el contenido
+   marcado con .print-invoice o .print-area.
+   - .print-invoice (FacturaDetalle.jsx) ya viene diseñada en blanco y
+     negro como una factura real.
+   - .print-area (páginas de Reportes) es el dashboard normal, así que
+     forzamos fondo blanco / texto oscuro para no gastar tinta imprimiendo
+     tarjetas y tablas oscuras. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-invoice,
+  .print-invoice *,
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-invoice,
+  .print-area {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    background: #fff;
+    padding: 24px;
+  }
+  .print-invoice {
+    color: #111;
+  }
+  .print-area * {
+    background: transparent !important;
+    color: #111 !important;
+    border-color: #ccc !important;
+  }
+}
+
+/* Clases del panel de Bodega (src/bodega). Van en @layer components para que
+   Tailwind las procese bien y no choquen con el panel admin. */
+@layer components {
+  .input { @apply w-full rounded-md border border-[#3a3a3a] bg-[#f4f4f4] px-3 py-1.5 text-sm text-black outline-none focus:ring-2 focus:ring-[#F2B01E]; }
+  .btn-primary { @apply rounded-md bg-[#F2B01E] px-4 py-2 text-sm font-semibold text-black transition hover:brightness-110; }
+  .btn-ghost { @apply rounded-md bg-[#3a3a3a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4a4a4a]; }
+  .card { @apply rounded-lg border border-[#333] bg-[#1f1f1f] p-4; }
+  .th { @apply border-b border-[#333] px-3 py-2 text-left text-xs font-semibold text-[#F2B01E]; }
+  .td { @apply border-b border-[#2a2a2a] px-3 py-2 text-sm; }
+}

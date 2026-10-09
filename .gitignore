@@ -5,6 +5,9 @@ env/
 
 # Configuración sensible e instancia local
 .env
+.env.*
+!.env.example
+!**/.env.example
 instance/*
 !instance/config.py
 
@@ -17,3 +20,8 @@ __pycache__/
 # Configuración de editores
 .vscode/
 .idea/
+
+# Frontend: dependencias, builds y configuración local
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
