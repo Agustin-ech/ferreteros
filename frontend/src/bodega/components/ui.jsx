@@ -6,19 +6,27 @@ export const Titulo = ({ icono: Icono, children }) => (
 );
 
 export const Stat = ({ icono: Icono, titulo, valor, nota, rojo }) => (
-  <div className="card flex items-center gap-3">
-    <div className="grid h-11 w-11 place-items-center rounded-lg bg-[#F2B01E]/15 text-[#F2B01E]"><Icono size={24} /></div>
-    <div>
-      <p className="text-xs text-gray-400">{titulo}</p>
-      <p className={`text-2xl font-bold ${rojo ? "text-red-500" : ""}`}>{valor}</p>
-      {nota && <p className="text-xs text-gray-400">{nota}</p>}
+  <div className="card flex flex-col gap-3">
+    <div className="flex items-center justify-between">
+      <p className="text-sm text-gray-400">{titulo}</p>
+      <span className={`grid h-8 w-8 place-items-center rounded-lg ${rojo ? "bg-red-500/15 text-red-400" : "bg-brand-yellow/15 text-brand-yellow"}`}>
+        <Icono size={16} />
+      </span>
     </div>
+    <p className={`text-2xl font-bold ${rojo ? "text-red-400" : "text-white"}`}>{valor}</p>
+    {nota && <p className="text-xs text-gray-500">{nota}</p>}
   </div>
 );
 
-const colores = { Activo: "bg-green-600", Inactivo: "bg-gray-600", Pendiente: "bg-red-600", Revisado: "bg-green-600", Recibido: "bg-green-600" };
+const colores = {
+  Activo: "bg-emerald-500/15 text-emerald-400",
+  Inactivo: "bg-gray-500/15 text-gray-400",
+  Pendiente: "bg-red-500/15 text-red-400",
+  Revisado: "bg-emerald-500/15 text-emerald-400",
+  Recibido: "bg-emerald-500/15 text-emerald-400",
+};
 export const Badge = ({ texto }) => (
-  <span className={`rounded px-2 py-0.5 text-xs font-semibold text-white ${colores[texto] || "bg-gray-600"}`}>{texto}</span>
+  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${colores[texto] || "bg-gray-500/15 text-gray-400"}`}>{texto}</span>
 );
 
 export const Campo = ({ label, requerido, children }) => (
@@ -54,11 +62,11 @@ export function Paginacion({ pagina, total, porPagina, onChange }) {
   const desde = total ? (pagina - 1) * porPagina + 1 : 0;
   const hasta = Math.min(total, pagina * porPagina);
   return (
-    <div className="mt-3 flex items-center justify-between text-sm text-gray-400">
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-400">
       <div className="flex gap-1">
         {Array.from({ length: paginas }, (_, i) => (
           <button key={i} onClick={() => onChange(i + 1)}
-            className={`h-7 w-7 rounded ${pagina === i + 1 ? "bg-[#F2B01E] font-bold text-black" : "bg-[#2a2a2a]"}`}>{i + 1}</button>
+            className={`h-8 w-8 rounded-lg border text-xs transition-colors ${pagina === i + 1 ? "border-brand-yellow bg-brand-yellow font-bold text-black" : "border-panel-border bg-panel-card text-gray-300 hover:border-brand-yellow"}`}>{i + 1}</button>
         ))}
       </div>
       <span>Mostrando {desde} - {hasta} de {total} registros</span>

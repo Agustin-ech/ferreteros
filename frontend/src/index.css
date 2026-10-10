@@ -53,13 +53,123 @@ body {
   }
 }
 
-/* Clases del panel de Bodega (src/bodega). Van en @layer components para que
-   Tailwind las procese bien y no choquen con el panel admin. */
+/* Estilos acotados a los paneles operativos; Admin conserva sus clases visuales. */
 @layer components {
-  .input { @apply w-full rounded-md border border-[#3a3a3a] bg-[#f4f4f4] px-3 py-1.5 text-sm text-black outline-none focus:ring-2 focus:ring-[#F2B01E]; }
-  .btn-primary { @apply rounded-md bg-[#F2B01E] px-4 py-2 text-sm font-semibold text-black transition hover:brightness-110; }
-  .btn-ghost { @apply rounded-md bg-[#3a3a3a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4a4a4a]; }
-  .card { @apply rounded-lg border border-[#333] bg-[#1f1f1f] p-4; }
-  .th { @apply border-b border-[#333] px-3 py-2 text-left text-xs font-semibold text-[#F2B01E]; }
-  .td { @apply border-b border-[#2a2a2a] px-3 py-2 text-sm; }
+  .role-panel .input { @apply w-full rounded-lg border border-panel-border bg-panel-card px-3 py-2 text-sm text-gray-200 outline-none placeholder-gray-500 focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow; }
+  .role-panel .btn-primary { @apply rounded-lg bg-brand-yellow px-4 py-2 text-sm font-semibold text-black transition hover:brightness-110; }
+  .role-panel .btn-ghost { @apply rounded-lg border border-panel-border bg-panel-card px-4 py-2 text-sm font-semibold text-gray-300 transition hover:border-brand-yellow hover:text-brand-yellow; }
+  .role-panel .card { @apply min-w-0 rounded-xl border border-panel-border bg-panel-card p-4; }
+  .role-panel .th { @apply border-b border-panel-border px-4 py-3 text-left text-xs font-medium text-gray-400; }
+  .role-panel .td { @apply border-b border-panel-border/60 px-4 py-3 text-sm text-gray-300; }
+}
+
+.role-panel .card {
+  overflow-x: auto;
+}
+
+.role-content > div[class~="p-8"] {
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+  padding: 0;
+}
+
+.role-content input:not([type="radio"]),
+.role-content select,
+.role-content textarea {
+  border-color: #2a2a2a;
+  border-radius: 0.5rem;
+  background-color: #1f1f1f;
+  color: #e5e7eb;
+}
+
+.role-content input:not([type="radio"])::placeholder,
+.role-content textarea::placeholder {
+  color: #6b7280;
+}
+
+.role-content input:not([type="radio"]):focus,
+.role-content select:focus,
+.role-content textarea:focus {
+  border-color: #f2b01e;
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 1px #f2b01e;
+}
+
+.role-content button[class*="bg-[#F2B01E]"] {
+  color: #111827;
+}
+
+.role-content [class*="bg-[#F2B01E]"] {
+  color: #111827;
+}
+
+.role-content div[class*="bg-[#1a1a1a]"] {
+  border-color: #2a2a2a;
+  border-radius: 0.75rem;
+  background-color: #1f1f1f;
+  box-shadow: none;
+}
+
+.role-content div[class*="bg-[#2a2a2a]"] {
+  border-color: #2a2a2a;
+  border-radius: 0.75rem;
+  background-color: #1f1f1f;
+}
+
+.role-content div[class*="bg-[#2a2a2a]"]:hover {
+  border-color: #f2b01e;
+  background-color: #1f1f1f;
+}
+
+.role-content h1[class*="text-2xl"],
+.role-content h2[class*="text-2xl"] {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+
+.role-content span.bg-green-600 {
+  background-color: rgb(16 185 129 / 15%);
+  color: #34d399;
+}
+
+.role-content span.bg-red-600 {
+  background-color: rgb(239 68 68 / 15%);
+  color: #f87171;
+}
+
+.role-content table {
+  min-width: 560px;
+  border-collapse: collapse;
+}
+
+.role-content table thead tr {
+  border-bottom: 1px solid #2a2a2a;
+  background-color: #141414;
+  color: #9ca3af;
+  text-align: left;
+  font-size: 0.75rem;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.role-content table thead th {
+  padding: 0.75rem 1rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.role-content table tbody tr {
+  border-bottom: 1px solid rgb(42 42 42 / 60%);
+  transition: background-color 150ms ease;
+}
+
+.role-content table tbody tr:hover {
+  background-color: rgb(255 255 255 / 5%);
+}
+
+.role-content table tbody td {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: #d1d5db;
 }
