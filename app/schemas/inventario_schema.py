@@ -30,6 +30,10 @@ class AjusteInventarioSchema(Schema):
         required=True,
         validate=validate.OneOf(["suma", "resta"]),
     )
+    motivo = fields.Str(
+        required=True,
+        validate=validate.Length(min=3, max=255),
+    )
 
 inventario_schema = InventarioSchema()
 inventarios_schema = InventarioSchema(many=True)

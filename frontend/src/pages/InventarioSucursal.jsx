@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Package, AlertTriangle, Wallet, Store, Eye, Pencil, ChevronLeft, ChevronRight, Plus,
+  Package, AlertTriangle, Wallet, Store, Pencil, ChevronLeft, ChevronRight, Plus,
 } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import ProductDetailPanel from '../components/ProductDetailPanel'
@@ -131,6 +131,16 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
     }
   }
 
+  function actualizarInventario(inventarioActualizado) {
+    setInventario((actual) => {
+      const existente = actual.some((item) => item.idInventario === inventarioActualizado.idInventario)
+      if (!existente) return [...actual, inventarioActualizado]
+      return actual.map((item) => item.idInventario === inventarioActualizado.idInventario
+        ? inventarioActualizado
+        : item)
+    })
+  }
+
   if (cargando) return <div className="text-sm text-gray-400">Cargando inventario de {nombreSucursal}...</div>
   if (error) return <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</div>
 
@@ -243,10 +253,7 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
                     </td>
                     <td className="py-3 pr-4">
                       <div className="flex items-center gap-3 text-gray-400">
-                        <button onClick={() => setProductoSeleccionado(p)} className="hover:text-white" title="Ver">
-                          <Eye size={16} />
-                        </button>
-                        <button onClick={() => setProductoSeleccionado(p)} className="hover:text-white" title="Ajustar">
+                        <button onClick={() => setProductoSeleccionado(p)} className="hover:text-white" title="Ver y ajustar inventario" aria-label={`Ver y ajustar ${p.nombre}`}>
                           <Pencil size={15} />
                         </button>
                       </div>
@@ -307,6 +314,7 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
           <ProductDetailPanel
             producto={productoSeleccionado}
             sucursales={[{ idSucursal, nombreSucursal }]}
+            onAjusteGuardado={actualizarInventario}
             onVolver={() => setProductoSeleccionado(null)}
           />
         )}

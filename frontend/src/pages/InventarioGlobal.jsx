@@ -101,6 +101,16 @@ export default function InventarioGlobal() {
   const stockBajo = filas.filter((fila) => fila.total <= 15).length
   const valorInventario = filas.reduce((sum, fila) => sum + fila.total * fila.precio, 0)
 
+  function actualizarInventario(inventarioActualizado) {
+    setInventario((actual) => {
+      const existente = actual.some((item) => item.idInventario === inventarioActualizado.idInventario)
+      if (!existente) return [...actual, inventarioActualizado]
+      return actual.map((item) => item.idInventario === inventarioActualizado.idInventario
+        ? inventarioActualizado
+        : item)
+    })
+  }
+
   if (cargando) {
     return <div className="text-sm text-gray-400">Cargando inventario real...</div>
   }
@@ -152,6 +162,7 @@ export default function InventarioGlobal() {
           <ProductDetailPanel
             producto={productoSeleccionado}
             sucursales={sucursales}
+            onAjusteGuardado={actualizarInventario}
             onVolver={() => setProductoSeleccionado(null)}
           />
         )}

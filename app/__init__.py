@@ -24,6 +24,7 @@ def create_app(config_class=Config):
     from app.models.producto import Producto
     from app.models.unidad_medida import UnidadMedida
     from app.models.inventario import Inventario
+    from app.models.alerta_inventario import AlertaInventario
     from app.models.tipo_movimiento import TipoMovimiento
     from app.models.ajuste_inventario import AjusteInventario
     from app.models.cliente import Cliente

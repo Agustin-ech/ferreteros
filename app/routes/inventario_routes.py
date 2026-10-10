@@ -1,8 +1,11 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from marshmallow import ValidationError
+from sqlalchemy import desc
 from sqlalchemy.orm import joinedload
 
+from app.extensions import db
+from app.models.ajuste_inventario import AjusteInventario
 from app.models.inventario import Inventario
 from app.schemas.inventario_schema import (
     ajuste_inventario_schema,
@@ -56,7 +59,9 @@ def ajustar_inventario():
             id_producto=data['idProducto'],
             id_sucursal=data['idSucursal'],
             cantidad=data['cantidad'],
-            operacion=data['operacion']
+            operacion=data['operacion'],
+            id_usuario=int(get_jwt_identity()),
+            motivo=data['motivo'],
         )
 
         resultado = inventario_schema.dump(nuevo_registro)
@@ -70,3 +75,45 @@ def ajustar_inventario():
     except ValueError as e:
         # Atrapa los errores lanzados por el InventarioService (ej. Stock insuficiente)
         return jsonify({"mensaje": str(e)}), 400
+
+
+@inventario_bp.route('/ajustes', methods=['GET'])
+@jwt_required()
+@requiere_rol('admin')
+def listar_ajustes_inventario():
+    id_producto = request.args.get('producto', type=int)
+    id_sucursal = request.args.get('sucursal', type=int)
+    if not id_producto or not id_sucursal:
+        return jsonify({"mensaje": "Debe indicar producto y sucursal."}), 400
+
+    ajustes = (
+        AjusteInventario.query
+        .options(
+            joinedload(AjusteInventario.usuario),
+            joinedload(AjusteInventario.tipo_movimiento),
+        )
+        .join(Inventario, AjusteInventario.idInventario == Inventario.idInventario)
+        .filter(
+            Inventario.idProducto == id_producto,
+            AjusteInventario.idSucursal == id_sucursal,
+        )
+        .order_by(desc(AjusteInventario.fecha))
+        .limit(50)
+    )
+
+    resultado = []
+    for ajuste in ajustes.all():
+        usuario = ajuste.usuario
+        resultado.append({
+            **ajuste.to_dict(),
+            "tipoMovimiento": ajuste.tipo_movimiento.nombre,
+            "esEntrada": ajuste.stockNuevo > ajuste.stockAnterior,
+            "nombreUsuario": " ".join(filter(None, (
+                usuario.primerNombre,
+                usuario.segundoNombre,
+                usuario.primerApellido,
+                usuario.segundoApellido,
+            ))),
+        })
+
+    return jsonify(resultado), 200
