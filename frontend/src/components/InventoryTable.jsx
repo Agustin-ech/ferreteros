@@ -142,8 +142,7 @@ export default function InventoryTable({ onSelectProduct, filas: filasProp, sucu
         <table className="w-full text-sm min-w-[540px]">
           <thead>
             <tr className="text-left text-gray-400 border-b border-panel-border">
-              <th className="py-3 pl-4 pr-2 w-8"></th>
-              <th className="py-3 pr-2 font-medium">
+              <th className="py-3 pl-6 pr-2 font-medium">
                 <button className="flex items-center gap-1 hover:text-white" onClick={() => toggleOrden('nombre')}>
                   Productos <ChevronsUpDown size={13} />
                 </button>
@@ -168,10 +167,7 @@ export default function InventoryTable({ onSelectProduct, filas: filasProp, sucu
                 onClick={() => onSelectProduct(p)}
                 className="border-b border-panel-border/60 last:border-0 hover:bg-white/5 cursor-pointer"
               >
-                <td className="py-3 pl-4 pr-2" onClick={(e) => e.stopPropagation()}>
-                  <input type="checkbox" className="accent-brand-yellow" />
-                </td>
-                <td className="py-3 pr-2 text-gray-200 font-medium">{p.nombre}</td>
+                <td className="py-3 pl-6 pr-2 text-gray-200 font-medium">{p.nombre}</td>
                 <td className="py-3 pr-2 text-gray-400">{p.categoria}</td>
                 {sucursalOptions.slice(1).map((nombreSucursal) => {
                   const sucursalId = sucursalLookup[nombreSucursal]
@@ -189,7 +185,7 @@ export default function InventoryTable({ onSelectProduct, filas: filasProp, sucu
             ))}
             {filas.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-8 text-center text-gray-500 text-sm">
+                <td colSpan={sucursalOptions.length + 4} className="py-8 text-center text-gray-500 text-sm">
                   Ningún producto coincide con esos filtros.
                 </td>
               </tr>

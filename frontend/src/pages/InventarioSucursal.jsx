@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Package, AlertTriangle, Wallet, Store, Pencil, ChevronLeft, ChevronRight, Plus,
+  Package, AlertTriangle, Wallet, Store, Pencil, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import ProductDetailPanel from '../components/ProductDetailPanel'
@@ -210,13 +210,6 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
               <option>Stock Bajo</option>
               <option>Agotado</option>
             </select>
-            <button
-              type="button"
-              onClick={() => filas[0] && setProductoSeleccionado(filas[0])}
-              className="ml-auto flex items-center gap-2 bg-brand-yellow text-panel-sidebar font-semibold text-sm rounded-lg px-4 py-2 hover:brightness-95 transition whitespace-nowrap"
-            >
-              <Plus size={16} /> Ajustar Inventario
-            </button>
           </div>
 
           {/* Tabla */}
@@ -224,8 +217,7 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
             <table className="w-full text-sm min-w-[560px]">
               <thead>
                 <tr className="text-left text-gray-400 border-b border-panel-border">
-                  <th className="py-3 pl-4 pr-2 w-8"></th>
-                  <th className="py-3 pr-2 font-medium">Productos</th>
+                  <th className="py-3 pl-6 pr-2 font-medium">Productos</th>
                   <th className="py-3 pr-2 font-medium">Categoría</th>
                   <th className="py-3 pr-2 font-medium">Stock</th>
                   <th className="py-3 pr-2 font-medium">Precio</th>
@@ -239,10 +231,7 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
                     key={p.id}
                     className="border-b border-panel-border/60 last:border-0 hover:bg-white/5"
                   >
-                    <td className="py-3 pl-4 pr-2">
-                      <input type="checkbox" className="accent-brand-yellow" />
-                    </td>
-                    <td className="py-3 pr-2 text-gray-200 font-medium">{p.nombre}</td>
+                    <td className="py-3 pl-6 pr-2 text-gray-200 font-medium">{p.nombre}</td>
                     <td className="py-3 pr-2 text-gray-400">{p.categoria}</td>
                     <td className="py-3 pr-2 text-gray-300 font-semibold">{p.stock}</td>
                     <td className="py-3 pr-2 text-gray-300">{formatoCOP.format(p.precio)}</td>
@@ -262,7 +251,7 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
                 ))}
                 {filasPagina.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-gray-500 text-sm">
+                    <td colSpan={6} className="py-8 text-center text-gray-500 text-sm">
                       Ningún producto coincide con esos filtros.
                     </td>
                   </tr>
