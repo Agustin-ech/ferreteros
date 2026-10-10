@@ -20,8 +20,13 @@ const estadoStyles = {
   Agotado: 'bg-red-500/15 text-red-400',
 }
 
-export default function ProductDetailPanel({ producto, onVolver }) {
-  const total = producto.laChinita + producto.buenaVista
+export default function ProductDetailPanel({ producto, sucursales = [], onVolver }) {
+  const stockPorSucursal = (sucursales || []).map((sucursal) => ({
+    nombre: sucursal.nombreSucursal,
+    valor: Number(producto[sucursal.idSucursal] ?? producto[sucursal.nombreSucursal] ?? 0),
+  }))
+
+  const total = stockPorSucursal.reduce((sum, item) => sum + item.valor, 0)
   const estado = getEstado(total)
   const valorTotal = producto.precio * total
 
@@ -66,15 +71,13 @@ export default function ProductDetailPanel({ producto, onVolver }) {
           <p className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
             <Boxes size={14} className="text-brand-yellow" /> Stock por Sucursal
           </p>
-          <div className="grid grid-cols-3 text-sm">
-            <div>
-              <p className="text-xs text-gray-500">La Chinita</p>
-              <p className="font-semibold text-white">{producto.laChinita}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Buena Vista</p>
-              <p className="font-semibold text-white">{producto.buenaVista}</p>
-            </div>
+          <div className="grid grid-cols-3 text-sm gap-2">
+            {stockPorSucursal.map((sucursal) => (
+              <div key={sucursal.nombre}>
+                <p className="text-xs text-gray-500">{sucursal.nombre}</p>
+                <p className="font-semibold text-white">{sucursal.valor}</p>
+              </div>
+            ))}
             <div>
               <p className="text-xs text-gray-500">Total</p>
               <p className="font-semibold text-white">{total}</p>

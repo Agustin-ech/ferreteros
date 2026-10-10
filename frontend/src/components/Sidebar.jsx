@@ -80,8 +80,18 @@ function SubmenuNode({ item, activePage, onNavigate }) {
   )
 }
 
-export default function Sidebar({ activePage, onNavigate }) {
+export default function Sidebar({ activePage, onNavigate, sucursales = [] }) {
   const [openMenu, setOpenMenu] = useState('Inventario')
+  const items = menuItems.map((item) => item.label !== 'Inventario' ? item : ({
+    ...item,
+    children: [
+      { label: 'Inventario global', page: 'inventario-global' },
+      ...sucursales.map((sucursal) => ({
+        label: sucursal.nombreSucursal,
+        page: `inventario-sucursal-${sucursal.idSucursal}`,
+      })),
+    ],
+  }))
 
   return (
     <aside className="hidden lg:flex w-64 shrink-0 flex-col bg-panel-sidebar border-r border-panel-border">
@@ -96,7 +106,7 @@ export default function Sidebar({ activePage, onNavigate }) {
       <p className="px-5 pt-4 pb-2 text-[11px] tracking-wide text-gray-500">Menu</p>
 
       <nav className="flex-1 overflow-y-auto px-2 pb-4">
-        {menuItems.map((item) => {
+        {items.map((item) => {
           const Icon = iconMap[item.icon]
           const isSubmenuOpen = openMenu === item.label
           const isActiveTop = item.page && activePage === item.page

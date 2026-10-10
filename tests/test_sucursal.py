@@ -1,6 +1,14 @@
 from types import SimpleNamespace
 
+from app import create_app
 from app.models.sucursal import Sucursal
+
+
+def test_sucursal_api_esta_registrada_en_la_app():
+    app = create_app()
+    rutas = {regla.rule for regla in app.url_map.iter_rules()}
+
+    assert "/api/sucursales" in rutas
 
 
 def test_sucursal_incluye_barrio_en_su_serializacion():

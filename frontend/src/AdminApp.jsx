@@ -1,13 +1,12 @@
 // Este archivo es el antiguo App.jsx del panel admin, renombrado a AdminApp.jsx.
 // Único cambio: recibe onLogout y se lo pasa al Header (botón "Cerrar sesión").
 // El nuevo App.jsx decide si mostrar el Login, este panel o el de Bodega.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Sidebar from './components/Sidebar'
 import Header from './components/Header'
 import Inicio from './pages/Inicio'
 import InventarioGlobal from './pages/InventarioGlobal'
-import InventarioLaChinita from './pages/InventarioLaChinita'
-import InventarioBuenaVista from './pages/InventarioBuenaVista'
+import InventarioSucursal from './pages/InventarioSucursal'
 import AjustesInventarioLaChinita from './pages/AjustesInventarioLaChinita'
 import AjustesInventarioBuenaVista from './pages/AjustesInventarioBuenaVista'
 import AlertaStockLaChinita from './pages/AlertaStockLaChinita'
@@ -33,6 +32,7 @@ import RolesPermisos from './pages/RolesPermisos'
 import ControlAsistencia from './pages/ControlAsistencia'
 import NominaSalarios from './pages/NominaSalarios'
 import ConfiguracionEmpleados from './pages/ConfiguracionEmpleados'
+import api from './api/client'
 import {
   empleados as empleadosIniciales,
   roles as rolesIniciales,
@@ -46,8 +46,6 @@ import {
 const paginas = {
   inicio: Inicio,
   'inventario-global': InventarioGlobal,
-  'inventario-la-chinita': InventarioLaChinita,
-  'inventario-buena-vista': InventarioBuenaVista,
   'ajustes-inventario-la-chinita': AjustesInventarioLaChinita,
   'ajustes-inventario-buena-vista': AjustesInventarioBuenaVista,
   'alerta-stock-la-chinita': AlertaStockLaChinita,
@@ -77,6 +75,20 @@ const paginas = {
 
 export default function AdminApp({ onLogout }) {
   const [activePage, setActivePage] = useState('inicio')
+  const [sucursales, setSucursales] = useState([])
+
+  useEffect(() => {
+    let cancelado = false
+    api.get('/api/sucursales', { params: { solo_activas: true } })
+      .then((response) => {
+        if (!cancelado) setSucursales((response.data || []).filter((sucursal) => sucursal.activa !== false))
+      })
+      .catch(() => {
+        if (!cancelado) setSucursales([])
+      })
+
+    return () => { cancelado = true }
+  }, [])
 
   // La lista de empleados vive aquí (no dentro de Empleados.jsx) para que
   // "Nuevo empleado" pueda agregar uno y que se vea de una en la lista al
@@ -123,17 +135,26 @@ export default function AdminApp({ onLogout }) {
     setEgresosState((prev) => prev.filter((e) => !(e.fecha === fecha && e.descripcion === descripcion)))
   }
 
+  const sucursalSeleccionada = activePage.startsWith('inventario-sucursal-')
+    ? sucursales.find((sucursal) => `inventario-sucursal-${sucursal.idSucursal}` === activePage)
+    : null
   const PaginaActiva = paginas[activePage] ?? Inicio
 
   return (
     <div className="min-h-screen flex bg-panel-bg text-gray-200">
-      <Sidebar activePage={activePage} onNavigate={setActivePage} />
+      <Sidebar activePage={activePage} onNavigate={setActivePage} sucursales={sucursales} />
 
       <div className="flex-1 flex flex-col min-w-0">
         <Header onLogout={onLogout} />
 
         <main className="flex-1 p-6 overflow-y-auto">
-          <PaginaActiva
+          {sucursalSeleccionada ? (
+            <InventarioSucursal
+              key={sucursalSeleccionada.idSucursal}
+              idSucursal={sucursalSeleccionada.idSucursal}
+              nombreSucursal={sucursalSeleccionada.nombreSucursal}
+            />
+          ) : <PaginaActiva
             onNavigate={setActivePage}
             empleados={empleadosState}
             onAgregarEmpleado={agregarEmpleado}
@@ -147,7 +168,7 @@ export default function AdminApp({ onLogout }) {
             onAgregarFactura={agregarFactura}
             egresos={egresosState}
             onEliminarEgreso={eliminarEgreso}
-          />
+          />}
         </main>
       </div>
     </div>

@@ -1,32 +1,7 @@
-// =====================================================================
-// TEMPORAL-BACKEND: ARCHIVO TEMPORAL (sin backend todavía)
-// Todos los datos de Bodega (productos, mercancía dañada, mercancía
-// recibida) viven aquí: datos de prueba + estado de React + localStorage.
-// Cuando el backend esté listo hay que:
-//  - Borrar productosIniciales / danadosIniciales / recibidosIniciales.
-//  - Reemplazar cada función de `api` (agregarProducto, agregarDanado,
-//    ajustar stock, etc.) por una llamada al backend (src/api/client.js)
-//    y volver a cargar la lista desde el servidor.
-//  - Quitar useGuardado (localStorage) y reiniciarDatos.
-//  - Que el backend descuente/sume el stock (hoy lo hace ajustarStock aquí).
-// Buscar "TEMPORAL-BACKEND" en el proyecto para ver todo lo pendiente.
-// =====================================================================
 import { createContext, useContext, useEffect, useState } from "react";
+import api from "../api/client";
 
 const hoy = () => new Date().toISOString().slice(0, 10);
-
-const productosIniciales = [
-  { codigo: "PRT-001", nombre: "Tornillo 5mm", tipo: "Ferretería", categoria: "Tornillos", marca: "Fixer", unidad: "Unidad", stock: 120, compra: 900, venta: 1500, proveedor: "Ferretería La 15", estado: "Activo", descripcion: "" },
-  { codigo: "PRT-002", nombre: "Cemento gris", tipo: "Construcción", categoria: "Cemento", marca: "Argos", unidad: "Saco", stock: 25, compra: 18000, venta: 22000, proveedor: "Ferretería La 15", estado: "Activo", descripcion: "" },
-  { codigo: "PRT-003", nombre: "Pintura blanca", tipo: "Pinturas", categoria: "Pinturas", marca: "Pintuco", unidad: "Galón", stock: 45, compra: 36000, venta: 45000, proveedor: "Pintuco SA", estado: "Activo", descripcion: "" },
-  { codigo: "PRT-004", nombre: "Cable eléctrico", tipo: "Electricidad", categoria: "Cables", marca: "Centelsa", unidad: "Metro", stock: 80, compra: 2500, venta: 3500, proveedor: "Electrocables", estado: "Activo", descripcion: "" },
-  { codigo: "PRT-005", nombre: "Martillo 16oz", tipo: "Herramientas", categoria: "Herramientas", marca: "Tramontina", unidad: "Unidad", stock: 12, compra: 20000, venta: 28000, proveedor: "Ferretería La 15", estado: "Activo", descripcion: "" },
-  { codigo: "PRT-006", nombre: "Taladro 1/2\"", tipo: "Herramientas", categoria: "Herramientas", marca: "Bosch", unidad: "Unidad", stock: 8, compra: 140000, venta: 180000, proveedor: "Ferretería La 15", estado: "Activo", descripcion: "" },
-  { codigo: "PRT-007", nombre: "Disco de corte", tipo: "Herramientas", categoria: "Herramientas", marca: "Norton", unidad: "Unidad", stock: 30, compra: 9000, venta: 12000, proveedor: "Ferretería La 15", estado: "Activo", descripcion: "" },
-  { codigo: "PRT-008", nombre: "Pintura negra", tipo: "Pinturas", categoria: "Pinturas", marca: "Pintuco", unidad: "Galón", stock: 18, compra: 33000, venta: 42000, proveedor: "Pintuco SA", estado: "Activo", descripcion: "" },
-  { codigo: "PRT-009", nombre: "Tubo PVC 1/2\"", tipo: "Plomería", categoria: "Plomería", marca: "Pavco", unidad: "Unidad", stock: 60, compra: 6000, venta: 8500, proveedor: "Pavco", estado: "Activo", descripcion: "" },
-  { codigo: "PRT-010", nombre: "Llave de paso", tipo: "Plomería", categoria: "Plomería", marca: "Grival", unidad: "Unidad", stock: 6, compra: 12000, venta: 17000, proveedor: "Pavco", estado: "Activo", descripcion: "" },
-];
 
 const danadosIniciales = [
   { id: 1, fecha: "2026-09-10", codigo: "PRT-005", producto: "Martillo 16oz", cantidad: 2, motivo: "Producto roto", descripcion: "Cabeza dañada", estado: "Pendiente" },
@@ -43,43 +18,225 @@ const recibidosIniciales = [
 const Ctx = createContext(null);
 export const useBodega = () => useContext(Ctx);
 
-// Guarda en localStorage para que los datos sobrevivan al recargar (sustituto temporal del backend)
-function useGuardado(clave, inicial) {
-  const [valor, setValor] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(clave)) ?? inicial; } catch { return inicial; }
-  });
-  useEffect(() => { localStorage.setItem(clave, JSON.stringify(valor)); }, [clave, valor]);
-  return [valor, setValor];
+const numero = (valor, fallback = 0) => {
+  const n = Number(valor);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const normalizarProducto = (producto, stockDisponible = 0) => {
+  const codigo = producto.codigoSKU || producto.codigo || "";
+  const nombre = producto.nombre || "";
+  const tipo = producto.tipo || producto.tipo_producto?.nombre || `Tipo ${producto.idTipoProducto || 1}`;
+  const categoria = producto.categoria || producto.tipo_producto?.nombre || tipo;
+  const unidad = producto.unidad || producto.unidadMedida?.nombre || `Unidad ${producto.idUnidadMedida || 1}`;
+
+  return {
+    idProducto: producto.idProducto ?? null,
+    codigo,
+    nombre,
+    tipo,
+    categoria,
+    marca: producto.marca || "",
+    unidad,
+    stock: numero(stockDisponible, producto.stock ?? 0),
+    compra: numero(producto.costoUnitario ?? producto.compra ?? 0),
+    venta: numero(producto.precio ?? producto.venta ?? 0),
+    proveedor: producto.proveedor || "",
+    estado: producto.activo === false ? "Inactivo" : "Activo",
+    descripcion: producto.descripcion || "",
+    idTipoProducto: producto.idTipoProducto ?? 1,
+    idUnidadMedida: producto.idUnidadMedida ?? 1,
+    stockMinimo: producto.stockMinimo ?? 5,
+    codigoSKU: codigo,
+  };
+};
+
+async function obtenerSucursalActual() {
+  try {
+    const { data } = await api.get("/api/auth/me");
+    return Number(data?.usuario?.idSucursal ?? 1);
+  } catch {
+    return 1;
+  }
 }
 
 export function BodegaProvider({ children }) {
-  const [productos, setProductos] = useGuardado("bodega_productos", productosIniciales);
-  const [danados, setDanados] = useGuardado("bodega_danados", danadosIniciales);
-  const [recibidos, setRecibidos] = useGuardado("bodega_recibidos", recibidosIniciales);
+  const [productos, setProductos] = useState([]);
+  const [danados, setDanados] = useState(danadosIniciales);
+  const [recibidos, setRecibidos] = useState(recibidosIniciales);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState("");
 
-  const ajustarStock = (codigo, delta) =>
-    setProductos((ps) => ps.map((p) => (p.codigo === codigo ? { ...p, stock: Math.max(0, p.stock + delta) } : p)));
+  useEffect(() => {
+    let cancelado = false;
 
-  const api = {
-    productos, danados, recibidos, hoy,
-    agregarProducto: (p) => setProductos((ps) => [p, ...ps]),
-    actualizarProducto: (codigo, cambios) => setProductos((ps) => ps.map((p) => (p.codigo === codigo ? { ...p, ...cambios } : p))),
-    eliminarProducto: (codigo) => setProductos((ps) => ps.filter((p) => p.codigo !== codigo)),
-    fijarStock: (codigo, stock) => setProductos((ps) => ps.map((p) => (p.codigo === codigo ? { ...p, stock } : p))),
-    agregarDanado: (d) => {
+    const cargarDatos = async () => {
+      setCargando(true);
+      setError("");
+      try {
+        const { data: perfil } = await api.get("/api/auth/me");
+        const usuario = perfil?.usuario || {};
+        const rol = String(usuario.rol || "").toLowerCase();
+        const sucursal = rol === "admin" ? null : Number(usuario.idSucursal || 1);
+
+        const [productosRes, inventarioRes] = await Promise.all([
+          api.get("/api/productos"),
+          sucursal ? api.get("/api/inventario", { params: { sucursal } }) : api.get("/api/inventario"),
+        ]);
+
+        const inventarioPorProducto = {};
+        for (const item of inventarioRes.data || []) {
+          inventarioPorProducto[item.idProducto] = numero(item.cantidadDisponible, 0);
+        }
+
+        const lista = (productosRes.data || []).map((producto) =>
+          normalizarProducto(producto, inventarioPorProducto[producto.idProducto] ?? 0)
+        );
+
+        if (!cancelado) setProductos(lista);
+      } catch (err) {
+        if (!cancelado) {
+          setProductos([]);
+          setError(
+            err?.response?.data?.mensaje ||
+            err?.response?.data?.error ||
+            "No se pudieron cargar los productos e inventario del backend."
+          );
+        }
+      } finally {
+        if (!cancelado) setCargando(false);
+      }
+    };
+
+    cargarDatos();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  const actualizarStock = async (codigo, delta) => {
+    const producto = productos.find((p) => p.codigo === codigo);
+    if (!producto) return null;
+
+    const idSucursal = await obtenerSucursalActual();
+    const cantidad = Math.abs(delta);
+    const operacion = delta >= 0 ? "suma" : "resta";
+
+    const { data } = await api.post("/api/inventario/ajustar", {
+      idProducto: producto.idProducto,
+      idSucursal,
+      cantidad,
+      operacion,
+    });
+
+    const stockActual = numero(data?.inventario_actualizado?.cantidadDisponible, producto.stock + delta);
+    setProductos((ps) =>
+      ps.map((p) => (p.idProducto === producto.idProducto ? { ...p, stock: stockActual } : p))
+    );
+
+    return data;
+  };
+
+  const apiBodega = {
+    productos,
+    danados,
+    recibidos,
+    hoy,
+    cargando,
+    error,
+    agregarProducto: async (p) => {
+      const payload = {
+        idTipoProducto: Number(p.idTipoProducto ?? 1),
+        idUnidadMedida: Number(p.idUnidadMedida ?? 1),
+        codigoSKU: String(p.codigo || p.codigoSKU || "").trim(),
+        nombre: String(p.nombre || "").trim(),
+        descripcion: p.descripcion || null,
+        precio: numero(p.venta ?? p.precio, 0),
+        costoUnitario: numero(p.compra ?? p.costoUnitario, 0),
+        stockMinimo: Number(p.stockMinimo || 5),
+      };
+
+      const { data } = await api.post("/api/productos", payload);
+      const productoNormalizado = normalizarProducto(data, 0);
+      setProductos((ps) => [productoNormalizado, ...ps]);
+      return productoNormalizado;
+    },
+    actualizarProducto: async (codigo, cambios) => {
+      const producto = productos.find((p) => p.codigo === codigo);
+      if (!producto) return null;
+
+      const payload = {
+        idTipoProducto: producto.idTipoProducto,
+        idUnidadMedida: producto.idUnidadMedida,
+        codigoSKU: producto.codigo,
+        nombre: producto.nombre,
+        descripcion: producto.descripcion,
+        precio: numero(cambios.venta ?? cambios.precio ?? producto.venta, 0),
+        costoUnitario: numero(cambios.compra ?? cambios.costoUnitario ?? producto.compra, 0),
+      };
+
+      const { data } = await api.put(`/api/productos/${producto.idProducto}`, payload);
+      const actualizado = normalizarProducto(data, producto.stock);
+      setProductos((ps) => ps.map((p) => (p.idProducto === producto.idProducto ? actualizado : p)));
+      return actualizado;
+    },
+    eliminarProducto: (codigo) => {
+      setProductos((ps) => ps.filter((p) => p.codigo !== codigo));
+    },
+    fijarStock: async (codigo, stock) => {
+      const producto = productos.find((p) => p.codigo === codigo);
+      if (!producto) return null;
+      const actual = numero(producto.stock, 0);
+      const nuevo = Math.max(0, numero(stock, 0));
+      if (nuevo === actual) return null;
+      const delta = nuevo - actual;
+      return actualizarStock(codigo, delta);
+    },
+    agregarDanado: async (d) => {
+      const producto = productos.find((p) => p.codigo === d.codigo);
+      if (!producto) return null;
+      const { data } = await api.post("/api/inventario/ajustar", {
+        idProducto: producto.idProducto,
+        idSucursal: await obtenerSucursalActual(),
+        cantidad: numero(d.cantidad, 0),
+        operacion: "resta",
+      });
+
       setDanados((ds) => [{ ...d, id: Date.now(), estado: "Pendiente" }, ...ds]);
-      ajustarStock(d.codigo, -d.cantidad);
+      const stockActual = numero(data?.inventario_actualizado?.cantidadDisponible, Math.max(0, producto.stock - numero(d.cantidad, 0)));
+      setProductos((ps) =>
+        ps.map((p) => (p.idProducto === producto.idProducto ? { ...p, stock: stockActual } : p))
+      );
+      return data;
     },
     alternarEstadoDanado: (id) =>
       setDanados((ds) => ds.map((d) => (d.id === id ? { ...d, estado: d.estado === "Pendiente" ? "Revisado" : "Pendiente" } : d))),
     eliminarDanado: (id) => setDanados((ds) => ds.filter((d) => d.id !== id)),
-    agregarRecibido: (r) => {
+    agregarRecibido: async (r) => {
+      const producto = productos.find((p) => p.codigo === r.codigo);
+      if (!producto) return null;
+      const { data } = await api.post("/api/inventario/ajustar", {
+        idProducto: producto.idProducto,
+        idSucursal: await obtenerSucursalActual(),
+        cantidad: numero(r.cantidad, 0),
+        operacion: "suma",
+      });
+
       setRecibidos((rs) => [{ ...r, id: Date.now(), estado: "Recibido" }, ...rs]);
-      ajustarStock(r.codigo, r.cantidad);
+      const stockActual = numero(data?.inventario_actualizado?.cantidadDisponible, producto.stock + numero(r.cantidad, 0));
+      setProductos((ps) =>
+        ps.map((p) => (p.idProducto === producto.idProducto ? { ...p, stock: stockActual } : p))
+      );
+      return data;
     },
-    reiniciarDatos: () => { setProductos(productosIniciales); setDanados(danadosIniciales); setRecibidos(recibidosIniciales); },
+    reiniciarDatos: () => {
+      setProductos([]);
+      setDanados(danadosIniciales);
+      setRecibidos(recibidosIniciales);
+    },
   };
-  return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
+
+  return <Ctx.Provider value={apiBodega}>{children}</Ctx.Provider>;
 }
 
 export const dinero = (n) => "$" + Number(n || 0).toLocaleString("es-CO");

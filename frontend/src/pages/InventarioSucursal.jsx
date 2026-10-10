@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Package, AlertTriangle, Wallet, Store, Eye, Pencil, ChevronLeft, ChevronRight, Plus,
 } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import ProductDetailPanel from '../components/ProductDetailPanel'
-import { productosInventario } from '../data/mockData'
+import api from '../api/client'
 
 const formatoCOP = new Intl.NumberFormat('es-CO', {
   style: 'currency',
@@ -28,29 +28,70 @@ const estadoStyles = {
 
 const ITEMS_POR_PAGINA = 7
 
-// Página de inventario de UNA sola sucursal (a diferencia de "Inventario
-// Global", que muestra el stock de ambas al tiempo). Recibe la llave del
-// campo en mockData ("laChinita" | "buenaVista") y el nombre a mostrar,
-// así que sirve tanto para La Chinita como para Buena Vista sin duplicar
-// código: ver InventarioLaChinita.jsx y InventarioBuenaVista.jsx.
-export default function InventarioSucursal({ sucursalKey, nombreSucursal }) {
+export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
   const [productoSeleccionado, setProductoSeleccionado] = useState(null)
+  const [productos, setProductos] = useState([])
+  const [inventario, setInventario] = useState([])
+  const [cargando, setCargando] = useState(true)
+  const [error, setError] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [categoria, setCategoria] = useState('Todas las Categorías')
   const [estadoFiltro, setEstadoFiltro] = useState('Todos')
   const [pagina, setPagina] = useState(1)
 
+  useEffect(() => {
+    let cancelado = false
+    setCargando(true)
+
+    Promise.all([
+      api.get('/api/productos'),
+      api.get('/api/inventario', { params: { sucursal: idSucursal } }),
+    ]).then(([productosResponse, inventarioResponse]) => {
+      if (cancelado) return
+      setProductos(productosResponse.data || [])
+      setInventario(inventarioResponse.data || [])
+      setError('')
+    }).catch((err) => {
+      if (cancelado) return
+      setError(err?.response?.data?.mensaje || err?.response?.data?.error || 'No se pudo cargar el inventario de esta sucursal.')
+      setProductos([])
+      setInventario([])
+    }).finally(() => {
+      if (!cancelado) setCargando(false)
+    })
+
+    return () => { cancelado = true }
+  }, [idSucursal])
+
+  const filasBase = useMemo(() => {
+    const stockPorProducto = Object.fromEntries(
+      inventario.map((item) => [item.idProducto, Number(item.cantidadDisponible || 0)])
+    )
+
+    return productos.map((producto) => {
+      const stock = stockPorProducto[producto.idProducto] || 0
+      return {
+        id: producto.idProducto,
+        codigo: producto.codigoSKU,
+        nombre: producto.nombre,
+        categoria: producto.tipo_producto?.nombre || producto.tipo || 'Sin categoría',
+        precio: Number(producto.precio || 0),
+        stock,
+        total: stock,
+        estado: getEstado(stock),
+        [idSucursal]: stock,
+        [nombreSucursal]: stock,
+      }
+    })
+  }, [productos, inventario, idSucursal, nombreSucursal])
+
   const categorias = useMemo(
-    () => ['Todas las Categorías', ...new Set(productosInventario.map((p) => p.categoria))],
-    []
+    () => ['Todas las Categorías', ...new Set(filasBase.map((p) => p.categoria))],
+    [filasBase]
   )
 
   const filas = useMemo(() => {
-    let filas = productosInventario.map((p) => ({
-      ...p,
-      stock: p[sucursalKey],
-      estado: getEstado(p[sucursalKey]),
-    }))
+    let filas = [...filasBase]
 
     if (busqueda.trim()) {
       filas = filas.filter((p) => p.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()))
@@ -62,7 +103,7 @@ export default function InventarioSucursal({ sucursalKey, nombreSucursal }) {
       filas = filas.filter((p) => p.estado === estadoFiltro)
     }
     return filas
-  }, [busqueda, categoria, estadoFiltro, sucursalKey])
+  }, [busqueda, categoria, estadoFiltro, filasBase])
 
   const totalPaginas = Math.max(1, Math.ceil(filas.length / ITEMS_POR_PAGINA))
   const paginaActual = Math.min(pagina, totalPaginas)
@@ -72,16 +113,16 @@ export default function InventarioSucursal({ sucursalKey, nombreSucursal }) {
   // Resumen de las tarjetas de arriba, calculado solo con el stock de esta
   // sucursal (no con el total combinado, como en Inventario Global).
   const resumen = useMemo(() => {
-    const valor = productosInventario.reduce((acc, p) => acc + p.precio * p[sucursalKey], 0)
-    const stockBajo = productosInventario.filter((p) => getEstado(p[sucursalKey]) === 'Stock Bajo').length
-    const agotados = productosInventario.filter((p) => p[sucursalKey] === 0).length
+    const valor = filasBase.reduce((acc, p) => acc + p.precio * p.stock, 0)
+    const stockBajo = filasBase.filter((p) => getEstado(p.stock) === 'Stock Bajo').length
+    const agotados = filasBase.filter((p) => p.stock === 0).length
     return {
-      productosTotales: productosInventario.length,
+      productosTotales: filasBase.length,
       stockBajo,
       valorInventario: valor,
       agotados,
     }
-  }, [sucursalKey])
+  }, [filasBase])
 
   function cambiarFiltro(setter) {
     return (valor) => {
@@ -89,6 +130,9 @@ export default function InventarioSucursal({ sucursalKey, nombreSucursal }) {
       setPagina(1)
     }
   }
+
+  if (cargando) return <div className="text-sm text-gray-400">Cargando inventario de {nombreSucursal}...</div>
+  if (error) return <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</div>
 
   return (
     <div className="flex flex-col gap-6">
@@ -262,6 +306,7 @@ export default function InventarioSucursal({ sucursalKey, nombreSucursal }) {
         {productoSeleccionado && (
           <ProductDetailPanel
             producto={productoSeleccionado}
+            sucursales={[{ idSucursal, nombreSucursal }]}
             onVolver={() => setProductoSeleccionado(null)}
           />
         )}

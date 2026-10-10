@@ -8,8 +8,6 @@ const formatoCOP = new Intl.NumberFormat('es-CO', {
   maximumFractionDigits: 0,
 })
 
-// Deriva el estado de stock a partir del total, para no tener que
-// mantenerlo sincronizado a mano en los datos de ejemplo.
 function getEstado(total) {
   if (total === 0) return 'Agotado'
   if (total <= 15) return 'Stock Bajo'
@@ -22,24 +20,47 @@ const estadoStyles = {
   Agotado: 'bg-red-500/15 text-red-400',
 }
 
-export default function InventoryTable({ onSelectProduct }) {
+export default function InventoryTable({ onSelectProduct, filas: filasProp, sucursales: sucursalesProp = [] }) {
   const [busqueda, setBusqueda] = useState('')
   const [categoria, setCategoria] = useState('Todas las Categorías')
   const [sucursal, setSucursal] = useState('Todas las Sucursales')
   const [estadoFiltro, setEstadoFiltro] = useState('Estado de Stock')
   const [orden, setOrden] = useState({ campo: null, dir: 'asc' })
 
+  const sucursalOptions = useMemo(() => {
+    const nombres = (sucursalesProp.length ? sucursalesProp : [{ nombreSucursal: 'La Chinita' }, { nombreSucursal: 'Buena Vista' }])
+      .map((s) => s.nombreSucursal || s.nombre || s)
+    return ['Todas las Sucursales', ...nombres]
+  }, [sucursalesProp])
+
+  const sucursalLookup = useMemo(
+    () => Object.fromEntries((sucursalesProp || []).map((s) => [s.nombreSucursal, s.idSucursal])),
+    [sucursalesProp]
+  )
+
+  const filasBase = useMemo(() => {
+    const source = filasProp && filasProp.length ? filasProp : productosInventario.map((p) => ({
+      ...p,
+      total: Number(p.laChinita || 0) + Number(p.buenaVista || 0),
+      estado: getEstado(Number(p.laChinita || 0) + Number(p.buenaVista || 0)),
+      laChinita: Number(p.laChinita || 0),
+      buenaVista: Number(p.buenaVista || 0),
+    }))
+
+    return source.map((p) => ({
+      ...p,
+      total: Number(p.total ?? ((p.laChinita || 0) + (p.buenaVista || 0))),
+      estado: p.estado || getEstado(Number(p.total ?? ((p.laChinita || 0) + (p.buenaVista || 0)))),
+    }))
+  }, [filasProp])
+
   const categorias = useMemo(
-    () => ['Todas las Categorías', ...new Set(productosInventario.map((p) => p.categoria))],
-    []
+    () => ['Todas las Categorías', ...new Set(filasBase.map((p) => p.categoria))],
+    [filasBase]
   )
 
   const filas = useMemo(() => {
-    let filas = productosInventario.map((p) => ({
-      ...p,
-      total: p.laChinita + p.buenaVista,
-      estado: getEstado(p.laChinita + p.buenaVista),
-    }))
+    let filas = [...filasBase]
 
     if (busqueda.trim()) {
       filas = filas.filter((p) => p.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()))
@@ -47,10 +68,12 @@ export default function InventoryTable({ onSelectProduct }) {
     if (categoria !== 'Todas las Categorías') {
       filas = filas.filter((p) => p.categoria === categoria)
     }
-    if (sucursal === 'La Chinita') {
-      filas = filas.filter((p) => p.laChinita > 0)
-    } else if (sucursal === 'Buena Vista') {
-      filas = filas.filter((p) => p.buenaVista > 0)
+    if (sucursal !== 'Todas las Sucursales') {
+      const sucursalId = sucursalLookup[sucursal]
+      filas = filas.filter((p) => {
+        const valor = Number(p[sucursalId] ?? p[sucursal] ?? 0)
+        return valor > 0
+      })
     }
     if (estadoFiltro !== 'Estado de Stock') {
       filas = filas.filter((p) => p.estado === estadoFiltro)
@@ -66,7 +89,7 @@ export default function InventoryTable({ onSelectProduct }) {
     }
 
     return filas
-  }, [busqueda, categoria, sucursal, estadoFiltro, orden])
+  }, [busqueda, categoria, sucursal, estadoFiltro, orden, filasBase, sucursalLookup])
 
   function toggleOrden(campo) {
     setOrden((o) => ({
@@ -77,7 +100,6 @@ export default function InventoryTable({ onSelectProduct }) {
 
   return (
     <div className="flex flex-col gap-4 min-w-0">
-      {/* Filtros */}
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="text"
@@ -100,9 +122,9 @@ export default function InventoryTable({ onSelectProduct }) {
           onChange={(e) => setSucursal(e.target.value)}
           className="bg-panel-card border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none"
         >
-          <option>Todas las Sucursales</option>
-          <option>La Chinita</option>
-          <option>Buena Vista</option>
+          {sucursalOptions.map((item) => (
+            <option key={item}>{item}</option>
+          ))}
         </select>
         <select
           value={estadoFiltro}
@@ -116,7 +138,6 @@ export default function InventoryTable({ onSelectProduct }) {
         </select>
       </div>
 
-      {/* Tabla */}
       <div className="bg-panel-card border border-panel-border rounded-xl overflow-x-auto scroll-thin">
         <table className="w-full text-sm min-w-[540px]">
           <thead>
@@ -128,8 +149,9 @@ export default function InventoryTable({ onSelectProduct }) {
                 </button>
               </th>
               <th className="py-3 pr-2 font-medium">Categoría</th>
-              <th className="py-3 pr-2 font-medium">La Chinita</th>
-              <th className="py-3 pr-2 font-medium">Buena Vista</th>
+              {sucursalOptions.slice(1).map((nombreSucursal) => (
+                <th key={nombreSucursal} className="py-3 pr-2 font-medium">{nombreSucursal}</th>
+              ))}
               <th className="py-3 pr-2 font-medium">
                 <button className="flex items-center gap-1 hover:text-white" onClick={() => toggleOrden('total')}>
                   Total <ChevronsUpDown size={13} />
@@ -151,8 +173,11 @@ export default function InventoryTable({ onSelectProduct }) {
                 </td>
                 <td className="py-3 pr-2 text-gray-200 font-medium">{p.nombre}</td>
                 <td className="py-3 pr-2 text-gray-400">{p.categoria}</td>
-                <td className="py-3 pr-2 text-gray-300">{p.laChinita}</td>
-                <td className="py-3 pr-2 text-gray-300">{p.buenaVista}</td>
+                {sucursalOptions.slice(1).map((nombreSucursal) => {
+                  const sucursalId = sucursalLookup[nombreSucursal]
+                  const valor = Number(p[sucursalId] ?? p[nombreSucursal] ?? 0)
+                  return <td key={`${p.id}-${nombreSucursal}`} className="py-3 pr-2 text-gray-300">{valor}</td>
+                })}
                 <td className="py-3 pr-2 text-gray-200 font-semibold">{p.total}</td>
                 <td className="py-3 pr-2 text-gray-300">{formatoCOP.format(p.precio)}</td>
                 <td className="py-3 pr-4">
@@ -164,7 +189,7 @@ export default function InventoryTable({ onSelectProduct }) {
             ))}
             {filas.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-gray-500 text-sm">
+                <td colSpan={10} className="py-8 text-center text-gray-500 text-sm">
                   Ningún producto coincide con esos filtros.
                 </td>
               </tr>

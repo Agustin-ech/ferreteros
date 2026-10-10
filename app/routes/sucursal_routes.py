@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import Sucursal
-from app.schemas import SucursalSchema
+from app.schemas.sucursal_schema import SucursalSchema
 from app.utils.auth import roles_required
 
 sucursal_bp = Blueprint("sucursales", __name__, url_prefix="/api/sucursales")
