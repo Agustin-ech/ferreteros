@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { DollarSign, FileText, Home, RefreshCw, ShoppingCart } from 'lucide-react'
 import RoleLayout from '../components/RoleLayout'
+import api from '../api/client'
 import Inicio from './components/Inicio'
 import ConsultarDevolucion from './components/ConsultarDevolucionIntegrada'
 import HistorialVentasIntegrado from './components/HistorialVentasIntegrado'
@@ -29,6 +30,28 @@ const navigation = [
 
 export default function VendedorApp({ usuario, onLogout }) {
   const [visitaActual, setVisitaActual] = useState('inicio')
+  const [nombreSucursal, setNombreSucursal] = useState('')
+
+  useEffect(() => {
+    const idSucursal = usuario?.idSucursal
+    if (!idSucursal) {
+      setNombreSucursal('')
+      return undefined
+    }
+
+    let vigente = true
+    api.get('/api/sucursales')
+      .then(({ data }) => {
+        if (!vigente) return
+        const sucursal = data.find((item) => Number(item.idSucursal) === Number(idSucursal))
+        setNombreSucursal(sucursal?.nombreSucursal || 'Nombre no disponible')
+      })
+      .catch(() => {
+        if (vigente) setNombreSucursal('Nombre no disponible')
+      })
+
+    return () => { vigente = false }
+  }, [usuario?.idSucursal])
 
   const renderizarVisita = () => {
     switch (visitaActual) {
@@ -47,7 +70,7 @@ export default function VendedorApp({ usuario, onLogout }) {
   return (
     <RoleLayout
       roleName="Vendedor"
-      localName={usuario?.idSucursal ? `Sucursal #${usuario.idSucursal}` : 'Sucursal sin asignar'}
+      localName={!usuario?.idSucursal ? 'Sucursal sin asignar' : nombreSucursal || 'Cargando sucursal...'}
       navigation={navigation}
       activePage={visitaActual}
       onNavigate={setVisitaActual}
