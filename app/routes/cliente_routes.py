@@ -60,7 +60,7 @@ def crear_cliente():
 @roles_required("admin", "vendedor")
 def listar_clientes():
     """Filtros opcionales: ?q=texto y ?idTipoDocumento=1."""
-    consulta = Cliente.query
+    consulta = Cliente.query.filter(Cliente.activo.is_(True))
 
     texto = (request.args.get("q") or "").strip()
     if texto:

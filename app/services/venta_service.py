@@ -185,6 +185,8 @@ class VentaService:
             consulta = consulta.where(Venta.fechaHora >= filtros["desde"])
         if filtros.get("hasta") is not None:
             consulta = consulta.where(Venta.fechaHora < filtros["hasta"])
+        if filtros.get("factura") is not None:
+            consulta = consulta.join(Factura).where(Factura.numeroFactura == filtros["factura"])
 
         total = db.session.scalar(select(func.count()).select_from(consulta.subquery())) or 0
         ventas = db.session.scalars(

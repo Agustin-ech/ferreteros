@@ -2,13 +2,11 @@ import { useState } from 'react'
 import { DollarSign, FileText, Home, RefreshCw, ShoppingCart } from 'lucide-react'
 import RoleLayout from '../components/RoleLayout'
 import Inicio from './components/Inicio'
-import ConsultarDevolucion from './components/ConsultarDevolucion'
-import FiltroVentas from './components/FiltroVentas'
-import HistorialPago from './components/HistorialPago'
-import FacturasEmitidas from './components/FacturasEmitidas'
-import RegistrarDevolucion from './components/RegistrarDevolucion'
-import VentasDelDia from './components/VentasDelDia'
-import NuevaVenta from './components/NuevaVenta'
+import ConsultarDevolucion from './components/ConsultarDevolucionIntegrada'
+import HistorialVentasIntegrado from './components/HistorialVentasIntegrado'
+import RegistrarDevolucion from './components/RegistrarDevolucionIntegrada'
+import VentasDelDia from './components/VentasDelDiaIntegradas'
+import NuevaVenta from './components/NuevaVentaIntegrada'
 
 const navigation = [
   { label: 'Inicio', icon: Home, page: 'inicio' },
@@ -29,17 +27,17 @@ const navigation = [
   ] },
 ]
 
-export default function VendedorApp({ onLogout }) {
+export default function VendedorApp({ usuario, onLogout }) {
   const [visitaActual, setVisitaActual] = useState('inicio')
 
   const renderizarVisita = () => {
     switch (visitaActual) {
       case 'inicio': return <Inicio cambiarVista={setVisitaActual} />
-      case 'nueva-venta': return <NuevaVenta />
-      case 'ventas-del-dia': return <VentasDelDia />
-      case 'filtro-ventas': return <FiltroVentas />
-      case 'facturas-emitidas': return <FacturasEmitidas />
-      case 'historial-pago': return <HistorialPago />
+      case 'nueva-venta': return <NuevaVenta idSucursal={usuario?.idSucursal} />
+      case 'ventas-del-dia': return <VentasDelDia idSucursal={usuario?.idSucursal} />
+      case 'filtro-ventas': return <HistorialVentasIntegrado titulo="Filtro de ventas" idSucursal={usuario?.idSucursal} />
+      case 'facturas-emitidas': return <HistorialVentasIntegrado titulo="Facturas emitidas" modo="facturas" idSucursal={usuario?.idSucursal} />
+      case 'historial-pago': return <HistorialVentasIntegrado titulo="Historial de pago" modo="pagos" idSucursal={usuario?.idSucursal} />
       case 'registrar-devolucion': return <RegistrarDevolucion />
       case 'consultar-devolucion': return <ConsultarDevolucion />
       default: return <Inicio cambiarVista={setVisitaActual} />
@@ -49,7 +47,7 @@ export default function VendedorApp({ onLogout }) {
   return (
     <RoleLayout
       roleName="Vendedor"
-      localName="La Chinita"
+      localName={usuario?.idSucursal ? `Sucursal #${usuario.idSucursal}` : 'Sucursal sin asignar'}
       navigation={navigation}
       activePage={visitaActual}
       onNavigate={setVisitaActual}
