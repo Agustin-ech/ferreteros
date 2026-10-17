@@ -18,6 +18,7 @@ export default function HistorialVentasIntegrado({ titulo, soloHoy = false, modo
   const manana = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
   const [fechaDesde, setFechaDesde] = useState(soloHoy ? hoy : '')
   const [fechaHasta, setFechaHasta] = useState(soloHoy ? manana : '')
+  const [metodoPago, setMetodoPago] = useState('')
   const [clienteTexto, setClienteTexto] = useState('')
   const [clienteElegido, setClienteElegido] = useState(null)
   const [clientes, setClientes] = useState([])
@@ -64,6 +65,7 @@ export default function HistorialVentasIntegrado({ titulo, soloHoy = false, modo
       desde: fechaISO(fechaDesde),
       hasta: fechaISO(fechaHasta, Boolean(fechaHasta)),
       cliente: clienteElegido?.idCliente,
+      metodoPago: metodoPago || undefined,
     }
     Object.keys(nuevosFiltros).forEach((clave) => nuevosFiltros[clave] === undefined && delete nuevosFiltros[clave])
     setPagina(1)
@@ -73,6 +75,7 @@ export default function HistorialVentasIntegrado({ titulo, soloHoy = false, modo
   function limpiarFiltros() {
     setFechaDesde('')
     setFechaHasta('')
+    setMetodoPago('')
     setClienteTexto('')
     setClienteElegido(null)
     setPagina(1)
@@ -111,6 +114,13 @@ export default function HistorialVentasIntegrado({ titulo, soloHoy = false, modo
         <label className="text-xs text-gray-400">Hasta
           <input type="date" value={fechaHasta} onChange={(evento) => setFechaHasta(evento.target.value)} className="mt-1 w-full border border-[#333] bg-[#1f1f1f] px-3 py-2 text-sm text-white" />
         </label>
+        {modo === 'pagos' && <label className="text-xs text-gray-400">Método de pago
+          <select value={metodoPago} onChange={(evento) => setMetodoPago(evento.target.value)} className="mt-1 w-full border border-[#333] bg-[#1f1f1f] px-3 py-2 text-sm text-white">
+            <option value="">Todos</option>
+            <option value="Efectivo">Efectivo</option>
+            <option value="Transferencia">Transferencia</option>
+          </select>
+        </label>}
         <div className="relative text-xs text-gray-400">
           <label htmlFor="filtro-cliente">Cliente (opcional)</label>
           <input id="filtro-cliente" value={clienteElegido ? `${clienteElegido.primerNombre} ${clienteElegido.primerApellido}` : clienteTexto} onChange={(evento) => { setClienteElegido(null); setClienteTexto(evento.target.value) }} placeholder="Nombre o documento" className="mt-1 w-full border border-[#333] bg-[#1f1f1f] px-3 py-2 text-sm text-white" />

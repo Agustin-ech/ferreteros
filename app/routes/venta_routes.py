@@ -113,11 +113,16 @@ def listar_ventas():
             "desde": _parametro_fecha("desde"),
             "hasta": _parametro_fecha("hasta"),
             "factura": request.args.get("factura", type=str),
+            "metodoPago": request.args.get("metodoPago", type=str),
         }
         if filtros["factura"] is not None:
             filtros["factura"] = filtros["factura"].strip()
             if not filtros["factura"] or len(filtros["factura"]) > 50:
                 raise ValueError("El parámetro 'factura' debe contener entre 1 y 50 caracteres.")
+        if filtros["metodoPago"] is not None:
+            filtros["metodoPago"] = filtros["metodoPago"].strip()
+            if not filtros["metodoPago"] or len(filtros["metodoPago"]) > 50:
+                raise ValueError("El parámetro 'metodoPago' debe contener entre 1 y 50 caracteres.")
         if filtros["desde"] and filtros["hasta"] and filtros["desde"] >= filtros["hasta"]:
             raise ValueError("'desde' debe ser anterior a 'hasta'.")
 

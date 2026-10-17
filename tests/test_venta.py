@@ -64,6 +64,7 @@ def app():
 			),
 			TipoVenta(idTipoVenta=1, nombre="Mostrador"),
 			MetodoPago(idMetodoPago=1, nombre="Efectivo"),
+			MetodoPago(idMetodoPago=2, nombre="Transferencia"),
 			TipoDevolucion(idTipoDevolucion=1, nombre="Cambio"),
 			TipoDeDocumento(idTipoDocumento=1, Acronimo="CC", nombre="Cédula"),
 			TipoUsuario(idTipoUsuario=1, nombre="vendedor"),
@@ -280,7 +281,10 @@ def test_catalogos_y_busqueda_de_clientes_activos(app):
 
 	assert catalogos.status_code == 200
 	assert catalogos.json["tiposVenta"] == [{"idTipoVenta": 1, "nombre": "Mostrador"}]
-	assert catalogos.json["metodosPago"] == [{"idMetodoPago": 1, "nombre": "Efectivo"}]
+	assert catalogos.json["metodosPago"] == [
+		{"idMetodoPago": 1, "nombre": "Efectivo"},
+		{"idMetodoPago": 2, "nombre": "Transferencia"},
+	]
 	assert catalogos.json["tiposDevolucion"] == [{"idTipoDevolucion": 1, "nombre": "Cambio"}]
 	assert catalogos.json["tiposDocumento"] == [
 		{"idTipoDocumento": 1, "acronimo": "CC", "nombre": "Cédula"}
@@ -316,3 +320,36 @@ def test_catalogos_y_busqueda_de_clientes_activos(app):
 	)
 	assert venta_con_cliente.status_code == 201
 	assert venta_con_cliente.json["data"]["idCliente"] == nuevo_cliente.json["idCliente"]
+
+
+def test_listado_ventas_filtra_por_metodo_pago(app):
+	from flask_jwt_extended import create_access_token
+
+	with app.app_context():
+		token = create_access_token(
+			identity="7",
+			additional_claims={"rol": "admin", "idSucursal": None},
+		)
+
+	client = app.test_client()
+	headers = {"Authorization": f"Bearer {token}"}
+	for metodo in ("Efectivo", "Transferencia"):
+		respuesta = client.post(
+			"/api/ventas",
+			json=payload_venta(metodoPago=metodo),
+			headers=headers,
+		)
+		assert respuesta.status_code == 201
+
+	efectivo = client.get("/api/ventas?metodoPago=Efectivo", headers=headers)
+	transferencia = client.get("/api/ventas?metodoPago=transferencia", headers=headers)
+	todas = client.get("/api/ventas", headers=headers)
+
+	assert efectivo.status_code == 200
+	assert efectivo.json["paginacion"]["total"] == 1
+	assert efectivo.json["data"][0]["metodoPago"] == "Efectivo"
+	assert transferencia.status_code == 200
+	assert transferencia.json["paginacion"]["total"] == 1
+	assert transferencia.json["data"][0]["metodoPago"] == "Transferencia"
+	assert todas.status_code == 200
+	assert todas.json["paginacion"]["total"] == 2
