@@ -38,7 +38,6 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
   const [carrito, setCarrito] = useState([])
   const [tipoVenta, setTipoVenta] = useState('')
   const [metodoPago, setMetodoPago] = useState('')
-  const [domicilio, setDomicilio] = useState(false)
   const [direccionEntrega, setDireccionEntrega] = useState('')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
@@ -76,6 +75,10 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
     () => carrito.reduce((suma, item) => suma + Number(item.precio) * Number(item.cantidad), 0),
     [carrito],
   )
+  const tipoVentaSeleccionado = catalogos.tiposVenta.find(
+    (tipo) => Number(tipo.idTipoVenta) === Number(tipoVenta),
+  )
+  const esDomicilio = tipoVentaSeleccionado?.nombre.trim().toLowerCase() === 'domicilio'
 
   function agregarProducto(producto) {
     setCarrito((actual) => {
@@ -184,7 +187,7 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
     if (!carrito.length) return setError('Agrega al menos un producto.')
     if (!tipoVenta || !metodoPago) return setError('Selecciona el tipo de venta y el método de pago.')
     if (consultaCliente.trim() && !seleccionCliente) return setError('Busca y selecciona el cliente, o completa su registro antes de procesar la venta.')
-    if (domicilio && !seleccionCliente) return setError('Selecciona un cliente para el domicilio.')
+    if (esDomicilio && !seleccionCliente) return setError('Selecciona un cliente para el domicilio.')
 
     const payload = {
       idSucursal: Number(idSucursal),
@@ -198,7 +201,7 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
 
     setCargando(true)
     try {
-      const respuesta = domicilio
+      const respuesta = esDomicilio
         ? await registrarDomicilio({
           ...payload,
           idCliente: Number(seleccionCliente.idCliente),
@@ -211,7 +214,7 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
       const venta = respuesta.data.data
       const idVenta = venta.idVenta
       const factura = idVenta ? (await obtenerFactura(idVenta)).data : venta.factura
-      setResultado({ factura, total: venta.total ?? venta.totalVenta, idVenta, domicilio })
+      setResultado({ factura, total: venta.total ?? venta.totalVenta, idVenta, domicilio: esDomicilio })
       setCarrito([])
     } catch (err) {
       setError(mensajeError(err))
@@ -314,10 +317,7 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
             {catalogos.metodosPago.map((metodo) => <option key={metodo.idMetodoPago} value={metodo.nombre}>{metodo.nombre}</option>)}
           </select>
         </label>
-        <label className="flex items-center gap-2 self-end pb-2 text-sm text-gray-200">
-          <input type="checkbox" checked={domicilio} onChange={(evento) => setDomicilio(evento.target.checked)} /> Entrega a domicilio
-        </label>
-        {domicilio && <label className="text-xs text-gray-400 md:col-span-3">Dirección de entrega
+        {esDomicilio && <label className="text-xs text-gray-400 md:col-span-3">Dirección de entrega
           <input className={`${campo} mt-1`} value={direccionEntrega} onChange={(evento) => setDireccionEntrega(evento.target.value)} placeholder="Usa la dirección del cliente o escribe otra" />
         </label>}
       </section>
@@ -365,7 +365,7 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
         <div className="flex gap-3">
           <button type="button" onClick={() => { setCarrito([]); setResultado(null); setError('') }} className="border border-[#444] px-4 py-2 text-sm text-gray-200 hover:bg-[#242424]">Vaciar</button>
           <button disabled={cargando || !idSucursal} type="submit" className="flex items-center gap-2 bg-[#F2B01E] px-5 py-2 text-sm font-semibold text-black hover:brightness-110 disabled:cursor-wait disabled:opacity-60">
-            <FiPlus /> {cargando ? 'Procesando...' : domicilio ? 'Registrar domicilio' : 'Procesar venta'}
+            <FiPlus /> {cargando ? 'Procesando...' : esDomicilio ? 'Registrar domicilio' : 'Procesar venta'}
           </button>
         </div>
       </div>
