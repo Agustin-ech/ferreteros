@@ -18,7 +18,7 @@ from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from marshmallow import ValidationError
 
 from app.schemas.venta_schema import (
-    factura_output_schema,
+    factura_detalle_output_schema,
     venta_input_schema,
     venta_output_schema,
     ventas_output_schema,
@@ -154,4 +154,4 @@ def obtener_factura(id_venta):
     factura = VentaService.obtener_factura(id_venta, _usuario_actual())
     if not factura:
         return jsonify({"mensaje": "Factura no encontrada."}), 404
-    return jsonify(factura_output_schema.dump(factura)), 200
+    return jsonify(factura_detalle_output_schema.dump(factura)), 200

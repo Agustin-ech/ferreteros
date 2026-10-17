@@ -59,6 +59,111 @@ class FacturaOutputSchema(Schema):
     total = fields.Float(attribute="valorTotal")
 
 
+class FacturaDetalleOutputSchema(FacturaOutputSchema):
+    fechaVenta = fields.Method("obtener_fecha_venta", dump_only=True)
+    subtotal = fields.Method("obtener_subtotal", dump_only=True)
+    descuento = fields.Method("obtener_descuento", dump_only=True)
+    costoEnvio = fields.Method("obtener_costo_envio", dump_only=True)
+    medioPago = fields.Method("obtener_medio_pago", dump_only=True)
+    tipoVenta = fields.Method("obtener_tipo_venta", dump_only=True)
+    cliente = fields.Method("obtener_cliente", dump_only=True)
+    sucursal = fields.Method("obtener_sucursal", dump_only=True)
+    vendedor = fields.Method("obtener_vendedor", dump_only=True)
+    detalles = fields.Method("obtener_detalles", dump_only=True)
+
+    def obtener_fecha_venta(self, factura):
+        return factura.venta.fechaHora if factura.venta else None
+
+    def obtener_subtotal(self, factura):
+        return factura.venta.subtotal if factura.venta else None
+
+    def obtener_descuento(self, factura):
+        return factura.venta.descuentoTotal if factura.venta else None
+
+    def obtener_costo_envio(self, factura):
+        return factura.venta.costoEnvio if factura.venta else None
+
+    def obtener_medio_pago(self, factura):
+        venta = factura.venta
+        return venta.metodo_pago.nombre if venta and venta.metodo_pago else None
+
+    def obtener_tipo_venta(self, factura):
+        venta = factura.venta
+        return venta.tipo_venta.nombre if venta and venta.tipo_venta else None
+
+    def obtener_cliente(self, factura):
+        cliente = factura.venta.cliente if factura.venta else None
+        if cliente is None:
+            return None
+        return {
+            "idCliente": cliente.idCliente,
+            "nombre": " ".join(
+                parte
+                for parte in (
+                    cliente.primerNombre,
+                    cliente.segundoNombre,
+                    cliente.primerApellido,
+                    cliente.segundoApellido,
+                )
+                if parte
+            ),
+            "tipoDocumento": cliente.tipo_documento.nombre if cliente.tipo_documento else None,
+            "numeroDocumento": cliente.numeroDocumento,
+            "direccion": cliente.direccion,
+            "barrio": cliente.barrio,
+            "telefono": cliente.telefono,
+            "correoElectronico": cliente.correoElectronico,
+        }
+
+    def obtener_sucursal(self, factura):
+        sucursal = factura.venta.sucursal if factura.venta else None
+        if sucursal is None:
+            return None
+        return {
+            "idSucursal": sucursal.idSucursal,
+            "nombre": sucursal.nombreSucursal,
+            "direccion": sucursal.direccion,
+            "barrio": sucursal.barrio,
+            "telefono": sucursal.telefono,
+        }
+
+    def obtener_vendedor(self, factura):
+        vendedor = factura.venta.usuario if factura.venta else None
+        if vendedor is None:
+            return None
+        return {
+            "idUsuario": vendedor.idUsuario,
+            "nombre": " ".join(
+                parte
+                for parte in (
+                    vendedor.primerNombre,
+                    vendedor.segundoNombre,
+                    vendedor.primerApellido,
+                    vendedor.segundoApellido,
+                )
+                if parte
+            ),
+        }
+
+    def obtener_detalles(self, factura):
+        venta = factura.venta
+        if venta is None:
+            return []
+        return [
+            {
+                "idDetalleVenta": detalle.idDetalleVenta,
+                "idProducto": detalle.idProducto,
+                "codigoSKU": detalle.producto.codigoSKU if detalle.producto else None,
+                "nombreProducto": detalle.producto.nombre if detalle.producto else None,
+                "cantidad": detalle.cantidad,
+                "precioUnitario": detalle.precio_unitario,
+                "descuento": detalle.descuento,
+                "subtotal": detalle.subtotal,
+            }
+            for detalle in venta.detalles
+        ]
+
+
 class VentaOutputSchema(Schema):
     idVenta = fields.Int(dump_only=True)
     idCliente = fields.Int()
@@ -82,3 +187,4 @@ venta_input_schema = VentaInputSchema()
 venta_output_schema = VentaOutputSchema()
 ventas_output_schema = VentaOutputSchema(many=True)
 factura_output_schema = FacturaOutputSchema()
+factura_detalle_output_schema = FacturaDetalleOutputSchema()

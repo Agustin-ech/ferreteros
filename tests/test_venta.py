@@ -15,6 +15,7 @@ from app.models.tipo_documento import TipoDeDocumento
 from app.models.tipo_usuario import TipoUsuario
 from app.models.tipo_venta import TipoVenta
 from app.models.usuario import Usuario
+from app.models.sucursal import Sucursal
 from app.models.venta import Venta
 from app.schemas.venta_schema import venta_input_schema, venta_output_schema
 from app.services.venta_service import VentaService
@@ -34,6 +35,7 @@ def app():
 		Inventario.__table__,
 		TipoDeDocumento.__table__,
 		TipoUsuario.__table__,
+		Sucursal.__table__,
 		Cliente.__table__,
 		Usuario.__table__,
 		TipoVenta.__table__,
@@ -65,6 +67,13 @@ def app():
 			TipoDevolucion(idTipoDevolucion=1, nombre="Cambio"),
 			TipoDeDocumento(idTipoDocumento=1, Acronimo="CC", nombre="Cédula"),
 			TipoUsuario(idTipoUsuario=1, nombre="vendedor"),
+			Sucursal(
+				idSucursal=1,
+				nombreSucursal="Sucursal Prueba",
+				direccion="Calle 1 # 2-3",
+				barrio="Centro",
+				telefono="3001234567",
+			),
 			Usuario(
 				idUsuario=7,
 				idTipoDocumento=1,
@@ -178,7 +187,11 @@ def test_endpoints_venta_post_lista_detalle_y_factura(app):
 
 	client = app.test_client()
 	headers = {"Authorization": f"Bearer {token}"}
-	respuesta = client.post("/api/ventas", json=payload_venta(), headers=headers)
+	respuesta = client.post(
+		"/api/ventas",
+		json=payload_venta(idCliente=1),
+		headers=headers,
+	)
 
 	assert respuesta.status_code == 201
 	id_venta = respuesta.json["data"]["idVenta"]
@@ -201,6 +214,17 @@ def test_endpoints_venta_post_lista_detalle_y_factura(app):
 	assert detalle.json["idVenta"] == id_venta
 	assert factura.status_code == 200
 	assert factura.json["total"] == 14.0
+	assert factura.json["cliente"]["numeroDocumento"] == "123"
+	assert factura.json["sucursal"]["nombre"] == "Sucursal Prueba"
+	assert factura.json["vendedor"]["nombre"] == "Vendedor Prueba"
+	assert factura.json["tipoVenta"] == "Mostrador"
+	assert factura.json["medioPago"] == "Efectivo"
+	assert factura.json["fechaVenta"]
+	assert float(factura.json["subtotal"]) == 15.15
+	assert float(factura.json["descuento"]) == 1.15
+	assert float(factura.json["costoEnvio"]) == 0
+	assert factura.json["detalles"][0]["codigoSKU"] == "TEST-001"
+	assert float(factura.json["detalles"][0]["precioUnitario"]) == 10.1
 
 
 def test_ruta_post_rechaza_sucursal_distinta_del_claim(app):

@@ -207,6 +207,11 @@ class VentaService:
             consulta.options(
                 selectinload(Venta.detalles).joinedload(DetalleVenta.producto),
                 joinedload(Venta.factura),
+                joinedload(Venta.cliente).joinedload(Cliente.tipo_documento),
+                joinedload(Venta.sucursal),
+                joinedload(Venta.usuario),
+                joinedload(Venta.tipo_venta),
+                joinedload(Venta.metodo_pago),
             )
         )
 
