@@ -193,6 +193,7 @@ class VentaService:
             consulta.options(
                 selectinload(Venta.detalles).joinedload(DetalleVenta.producto),
                 joinedload(Venta.factura),
+                joinedload(Venta.cliente),
             )
             .order_by(Venta.fechaHora.desc(), Venta.idVenta.desc())
             .offset((pagina - 1) * por_pagina)

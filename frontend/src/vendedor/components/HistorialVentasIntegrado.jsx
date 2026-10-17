@@ -139,7 +139,7 @@ export default function HistorialVentasIntegrado({ titulo, soloHoy = false, modo
             {!cargando && ventas.map((venta) => <tr key={venta.idVenta}>
               <td className="py-3 pr-4 font-medium text-white">{venta.factura?.numeroFactura || `Venta #${venta.idVenta}`}</td>
               <td className="pr-4">{fechaLegible(venta.fechaHora)}</td>
-              <td className="pr-4">{venta.idCliente ? `Cliente #${venta.idCliente}` : 'Venta sin cliente'}</td>
+              <td className="pr-4">{venta.clienteNombre || (venta.idCliente ? `Cliente #${venta.idCliente}` : 'Venta sin cliente')}</td>
               {modo !== 'facturas' && <td className="pr-4">{venta.metodoPago || '—'}</td>}
               <td className="pr-4 font-semibold">{moneda.format(venta.total || 0)}</td>
               <td className="text-right"><button type="button" title="Ver detalle y factura" onClick={() => verDetalle(venta.idVenta)} className="inline-flex p-2 text-gray-300 hover:text-[#F2B01E]"><FiEye /></button></td>

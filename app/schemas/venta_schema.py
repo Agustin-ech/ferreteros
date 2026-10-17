@@ -167,6 +167,7 @@ class FacturaDetalleOutputSchema(FacturaOutputSchema):
 class VentaOutputSchema(Schema):
     idVenta = fields.Int(dump_only=True)
     idCliente = fields.Int()
+    clienteNombre = fields.Method("obtener_nombre_cliente", dump_only=True)
     idSucursal = fields.Int()
     idUsuario = fields.Int()
     idTipoVenta = fields.Int()
@@ -182,6 +183,21 @@ class VentaOutputSchema(Schema):
 
     def obtener_nombre_metodo_pago(self, venta):
         return venta.metodo_pago.nombre if venta.metodo_pago else None
+
+    def obtener_nombre_cliente(self, venta):
+        cliente = venta.cliente
+        if cliente is None:
+            return None
+        return " ".join(
+            parte
+            for parte in (
+                cliente.primerNombre,
+                cliente.segundoNombre,
+                cliente.primerApellido,
+                cliente.segundoApellido,
+            )
+            if parte
+        )
 
 venta_input_schema = VentaInputSchema()
 venta_output_schema = VentaOutputSchema()

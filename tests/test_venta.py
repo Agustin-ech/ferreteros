@@ -207,6 +207,7 @@ def test_endpoints_venta_post_lista_detalle_y_factura(app):
 
 	assert lista.status_code == 200
 	assert lista.json["paginacion"]["total"] == 1
+	assert lista.json["data"][0]["clienteNombre"] == "Ana Prueba"
 	assert busqueda_factura.status_code == 200
 	assert busqueda_factura.json["paginacion"]["total"] == 1
 	assert busqueda_factura.json["data"][0]["factura"]["numeroFactura"] == factura.json["numeroFactura"]
