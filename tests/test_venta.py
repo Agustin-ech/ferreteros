@@ -257,5 +257,37 @@ def test_catalogos_y_busqueda_de_clientes_activos(app):
 	assert catalogos.json["tiposVenta"] == [{"idTipoVenta": 1, "nombre": "Mostrador"}]
 	assert catalogos.json["metodosPago"] == [{"idMetodoPago": 1, "nombre": "Efectivo"}]
 	assert catalogos.json["tiposDevolucion"] == [{"idTipoDevolucion": 1, "nombre": "Cambio"}]
+	assert catalogos.json["tiposDocumento"] == [
+		{"idTipoDocumento": 1, "acronimo": "CC", "nombre": "Cédula"}
+	]
 	assert clientes.status_code == 200
 	assert [cliente["idCliente"] for cliente in clientes.json["items"]] == [1]
+
+	cliente_por_documento = client.get(
+		"/api/clientes?documento=123",
+		headers=headers,
+	)
+	assert cliente_por_documento.status_code == 200
+	assert cliente_por_documento.json["items"][0]["idCliente"] == 1
+
+	nuevo_cliente = client.post(
+		"/api/clientes",
+		json={
+			"idTipoDocumento": 1,
+			"numeroDocumento": "999",
+			"primerNombre": "Luis",
+			"primerApellido": "Nuevo",
+			"direccion": "Calle 1",
+		},
+		headers=headers,
+	)
+	assert nuevo_cliente.status_code == 201
+	assert nuevo_cliente.json["idCliente"] is not None
+
+	venta_con_cliente = client.post(
+		"/api/ventas",
+		json=payload_venta(idCliente=nuevo_cliente.json["idCliente"]),
+		headers=headers,
+	)
+	assert venta_con_cliente.status_code == 201
+	assert venta_con_cliente.json["data"]["idCliente"] == nuevo_cliente.json["idCliente"]

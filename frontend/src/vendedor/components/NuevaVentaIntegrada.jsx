@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FiPlus, FiShoppingCart, FiTrash2 } from 'react-icons/fi'
 import {
-  buscarClientes,
+  buscarClientePorDocumento,
   buscarProductos,
   listarCatalogosVenta,
   obtenerFactura,
+  registrarCliente,
   registrarDomicilio,
   registrarVenta,
 } from '../../api/vendedor'
@@ -16,12 +17,24 @@ function mensajeError(error) {
 }
 
 export default function NuevaVentaIntegrada({ idSucursal }) {
-  const [catalogos, setCatalogos] = useState({ tiposVenta: [], metodosPago: [] })
+  const [catalogos, setCatalogos] = useState({ tiposVenta: [], metodosPago: [], tiposDocumento: [] })
   const [productosEncontrados, setProductosEncontrados] = useState([])
-  const [clientesEncontrados, setClientesEncontrados] = useState([])
   const [consultaProducto, setConsultaProducto] = useState('')
   const [consultaCliente, setConsultaCliente] = useState('')
   const [seleccionCliente, setSeleccionCliente] = useState(null)
+  const [estadoBusquedaCliente, setEstadoBusquedaCliente] = useState('inicial')
+  const [guardandoCliente, setGuardandoCliente] = useState(false)
+  const [nuevoCliente, setNuevoCliente] = useState({
+    idTipoDocumento: '',
+    primerNombre: '',
+    segundoNombre: '',
+    primerApellido: '',
+    segundoApellido: '',
+    direccion: '',
+    barrio: '',
+    telefono: '',
+    correoElectronico: '',
+  })
   const [carrito, setCarrito] = useState([])
   const [tipoVenta, setTipoVenta] = useState('')
   const [metodoPago, setMetodoPago] = useState('')
@@ -59,22 +72,6 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
     return () => { vigente = false }
   }, [consultaProducto])
 
-  useEffect(() => {
-    let vigente = true
-    if (consultaCliente.trim().length < 2) {
-      setClientesEncontrados([])
-      return () => { vigente = false }
-    }
-    buscarClientes(consultaCliente.trim())
-      .then(({ data }) => {
-        if (vigente) setClientesEncontrados(data.items || [])
-      })
-      .catch((err) => {
-        if (vigente) setError(mensajeError(err))
-      })
-    return () => { vigente = false }
-  }, [consultaCliente])
-
   const total = useMemo(
     () => carrito.reduce((suma, item) => suma + Number(item.precio) * Number(item.cantidad), 0),
     [carrito],
@@ -101,6 +98,84 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
       : item))
   }
 
+  async function buscarCliente() {
+    const documento = consultaCliente.trim()
+    setError('')
+    setSeleccionCliente(null)
+    setEstadoBusquedaCliente('buscando')
+    if (!documento) {
+      setEstadoBusquedaCliente('inicial')
+      return setError('Escribe la cédula o documento del cliente.')
+    }
+
+    try {
+      const { data } = await buscarClientePorDocumento(documento)
+      const cliente = data.items?.[0]
+      if (cliente) {
+        setSeleccionCliente(cliente)
+        setDireccionEntrega(cliente.direccion || '')
+        setEstadoBusquedaCliente('encontrado')
+      } else {
+        setNuevoCliente((actual) => ({ ...actual, idTipoDocumento: '', primerNombre: '', segundoNombre: '', primerApellido: '', segundoApellido: '', direccion: '', barrio: '', telefono: '', correoElectronico: '' }))
+        setEstadoBusquedaCliente('no-encontrado')
+      }
+    } catch (err) {
+      setEstadoBusquedaCliente('inicial')
+      setError(mensajeError(err))
+    }
+  }
+
+  function cambiarCampoCliente(evento) {
+    const { name, value } = evento.target
+    setNuevoCliente((actual) => ({ ...actual, [name]: value }))
+  }
+
+  async function guardarCliente() {
+    setError('')
+    if (!consultaCliente.trim()) return setError('Escribe la cédula del cliente antes de guardarlo.')
+    const payload = {
+      idTipoDocumento: Number(nuevoCliente.idTipoDocumento),
+      numeroDocumento: consultaCliente.trim(),
+      primerNombre: nuevoCliente.primerNombre.trim(),
+      segundoNombre: nuevoCliente.segundoNombre.trim() || null,
+      primerApellido: nuevoCliente.primerApellido.trim(),
+      segundoApellido: nuevoCliente.segundoApellido.trim() || null,
+      direccion: nuevoCliente.direccion.trim() || null,
+      barrio: nuevoCliente.barrio.trim() || null,
+      telefono: nuevoCliente.telefono.trim() || null,
+      correoElectronico: nuevoCliente.correoElectronico.trim() || null,
+    }
+    if (!payload.idTipoDocumento || !payload.primerNombre || !payload.primerApellido) {
+      return setError('Selecciona el tipo de documento e ingresa el primer nombre y apellido.')
+    }
+    setGuardandoCliente(true)
+    try {
+      const { data } = await registrarCliente(payload)
+      setSeleccionCliente(data)
+      setDireccionEntrega(data.direccion || '')
+      setEstadoBusquedaCliente('encontrado')
+    } catch (err) {
+      if (err.response?.status === 409) {
+        try {
+          const { data } = await buscarClientePorDocumento(payload.numeroDocumento)
+          const clienteExistente = data.items?.[0]
+          if (clienteExistente) {
+            setSeleccionCliente(clienteExistente)
+            setEstadoBusquedaCliente('encontrado')
+            setError('Ese documento ya estaba registrado; se seleccionó el cliente existente.')
+            return
+          }
+        } catch {
+          setError('El documento ya está registrado, pero no se pudo recuperar el cliente. Vuelve a buscarlo.')
+          return
+        }
+      }
+      setError(mensajeError(err))
+    } finally {
+      setGuardandoCliente(false)
+    }
+  }
+
   async function procesarVenta(evento) {
     evento.preventDefault()
     setError('')
@@ -108,6 +183,7 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
     if (!idSucursal) return setError('La sesión no tiene una sucursal asignada.')
     if (!carrito.length) return setError('Agrega al menos un producto.')
     if (!tipoVenta || !metodoPago) return setError('Selecciona el tipo de venta y el método de pago.')
+    if (consultaCliente.trim() && !seleccionCliente) return setError('Busca y selecciona el cliente, o completa su registro antes de procesar la venta.')
     if (domicilio && !seleccionCliente) return setError('Selecciona un cliente para el domicilio.')
 
     const payload = {
@@ -155,28 +231,74 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
 
       <section className="space-y-4 border-y border-[#2a2a2a] py-5">
         <h3 className="text-sm font-semibold text-gray-200">Cliente</h3>
-        <div className="relative">
-          <label className="mb-1 block text-xs text-gray-400" htmlFor="cliente-venta">Buscar por nombre o documento</label>
-          <input
-            id="cliente-venta"
-            className={campo}
-            value={seleccionCliente ? `${seleccionCliente.primerNombre} ${seleccionCliente.primerApellido} (${seleccionCliente.numeroDocumento})` : consultaCliente}
-            onChange={(evento) => { setSeleccionCliente(null); setConsultaCliente(evento.target.value) }}
-            placeholder="Escribe al menos dos caracteres"
-          />
-          {clientesEncontrados.length > 0 && !seleccionCliente && (
-            <ul className="absolute z-10 mt-1 max-h-52 w-full overflow-auto border border-[#333] bg-[#151515] shadow-lg">
-              {clientesEncontrados.map((cliente) => (
-                <li key={cliente.idCliente}>
-                  <button type="button" onClick={() => { setSeleccionCliente(cliente); setConsultaCliente(''); setClientesEncontrados([]) }} className="w-full px-3 py-2 text-left text-sm text-white hover:bg-[#292929]">
-                    {cliente.primerNombre} {cliente.segundoNombre || ''} {cliente.primerApellido} {cliente.segundoApellido || ''} · {cliente.numeroDocumento}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <label className="flex-1 text-xs text-gray-400" htmlFor="cliente-venta">Cédula o número de documento
+            <input
+              id="cliente-venta"
+              className={`${campo} mt-1`}
+              value={consultaCliente}
+              onChange={(evento) => {
+                setConsultaCliente(evento.target.value)
+                setSeleccionCliente(null)
+                setEstadoBusquedaCliente('inicial')
+              }}
+              onKeyDown={(evento) => { if (evento.key === 'Enter') { evento.preventDefault(); buscarCliente() } }}
+              placeholder="Escribe el documento y busca"
+              disabled={Boolean(seleccionCliente)}
+            />
+          </label>
+          {!seleccionCliente && <button type="button" onClick={buscarCliente} disabled={estadoBusquedaCliente === 'buscando'} className="mt-auto h-10 border border-[#444] px-4 text-sm text-white hover:border-[#F2B01E] disabled:opacity-60">
+            {estadoBusquedaCliente === 'buscando' ? 'Buscando...' : 'Buscar cliente'}
+          </button>}
         </div>
-        {seleccionCliente && <button type="button" onClick={() => setSeleccionCliente(null)} className="text-xs text-[#F2B01E]">Quitar cliente seleccionado</button>}
+        {seleccionCliente && <div className="flex flex-wrap items-center justify-between gap-3 border border-emerald-900 bg-emerald-950/30 p-3 text-sm text-emerald-100">
+          <div><strong>{seleccionCliente.primerNombre} {seleccionCliente.segundoNombre || ''} {seleccionCliente.primerApellido} {seleccionCliente.segundoApellido || ''}</strong><div className="text-xs text-emerald-200/70">Documento {seleccionCliente.numeroDocumento} · {seleccionCliente.telefono || 'Sin teléfono'} · {seleccionCliente.correoElectronico || 'Sin correo'}</div></div>
+          <button type="button" onClick={() => { setSeleccionCliente(null); setConsultaCliente(''); setEstadoBusquedaCliente('inicial') }} className="text-xs text-[#F2B01E]">Cambiar cliente</button>
+        </div>}
+        {estadoBusquedaCliente === 'no-encontrado' && <div className="space-y-4 border border-[#333] p-4">
+          <div><h4 className="text-sm font-semibold text-white">Cliente no encontrado</h4><p className="mt-1 text-xs text-gray-400">Completa estos datos para guardarlo y asociarlo a la venta.</p></div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="text-xs text-gray-400">Tipo de documento
+              <select required name="idTipoDocumento" value={nuevoCliente.idTipoDocumento} onChange={cambiarCampoCliente} className={campo}>
+                <option value="">Selecciona</option>
+                {catalogos.tiposDocumento.map((tipo) => <option key={tipo.idTipoDocumento} value={tipo.idTipoDocumento}>{tipo.acronimo} · {tipo.nombre}</option>)}
+              </select>
+            </label>
+            <label className="text-xs text-gray-400">Cédula / documento
+              <input readOnly value={consultaCliente} className={`${campo} opacity-70`} />
+            </label>
+            <label className="text-xs text-gray-400">Primer nombre
+              <input required maxLength="150" name="primerNombre" value={nuevoCliente.primerNombre} onChange={cambiarCampoCliente} className={campo} />
+            </label>
+            <label className="text-xs text-gray-400">Segundo nombre
+              <input maxLength="150" name="segundoNombre" value={nuevoCliente.segundoNombre} onChange={cambiarCampoCliente} className={campo} />
+            </label>
+            <label className="text-xs text-gray-400">Primer apellido
+              <input required maxLength="150" name="primerApellido" value={nuevoCliente.primerApellido} onChange={cambiarCampoCliente} className={campo} />
+            </label>
+            <label className="text-xs text-gray-400">Segundo apellido
+              <input maxLength="150" name="segundoApellido" value={nuevoCliente.segundoApellido} onChange={cambiarCampoCliente} className={campo} />
+            </label>
+            <label className="text-xs text-gray-400">Dirección
+              <input maxLength="50" name="direccion" value={nuevoCliente.direccion} onChange={cambiarCampoCliente} className={campo} />
+            </label>
+            <label className="text-xs text-gray-400">Barrio
+              <input maxLength="50" name="barrio" value={nuevoCliente.barrio} onChange={cambiarCampoCliente} className={campo} />
+            </label>
+            <label className="text-xs text-gray-400">Teléfono
+              <input maxLength="20" name="telefono" value={nuevoCliente.telefono} onChange={cambiarCampoCliente} className={campo} />
+            </label>
+            <label className="text-xs text-gray-400 md:col-span-2">Correo electrónico
+              <input type="email" maxLength="100" name="correoElectronico" value={nuevoCliente.correoElectronico} onChange={cambiarCampoCliente} className={campo} />
+            </label>
+          </div>
+          <div className="flex justify-end">
+            <button type="button" disabled={guardandoCliente || !catalogos.tiposDocumento.length} onClick={guardarCliente} className="bg-[#F2B01E] px-4 py-2 text-sm font-semibold text-black disabled:opacity-60">
+              {guardandoCliente ? 'Guardando cliente...' : 'Guardar y usar en esta venta'}
+            </button>
+          </div>
+        </div>}
+        {!seleccionCliente && estadoBusquedaCliente === 'inicial' && <p className="text-xs text-gray-500">Cliente opcional para venta de mostrador. Si lo identificas por documento, sus datos quedan guardados para futuras compras.</p>}
       </section>
 
       <section className="grid gap-4 border-b border-[#2a2a2a] pb-5 md:grid-cols-3">

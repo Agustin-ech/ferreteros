@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.extensions import db
 from app.models.metodo_pago import MetodoPago
 from app.models.tipo_devolucion import TipoDevolucion
+from app.models.tipo_documento import TipoDeDocumento
 from app.models.tipo_venta import TipoVenta
 from app.utils.decorators import requiere_rol
 
@@ -26,6 +27,11 @@ def listar_catalogos_venta():
         .where(TipoDevolucion.activo.is_(True))
         .order_by(TipoDevolucion.nombre)
     ).all()
+    tipos_documento = db.session.scalars(
+        select(TipoDeDocumento)
+        .where(TipoDeDocumento.activo.is_(True))
+        .order_by(TipoDeDocumento.nombre)
+    ).all()
 
     return jsonify({
         "tiposVenta": [
@@ -39,5 +45,13 @@ def listar_catalogos_venta():
         "tiposDevolucion": [
             {"idTipoDevolucion": item.idTipoDevolucion, "nombre": item.nombre}
             for item in tipos_devolucion
+        ],
+        "tiposDocumento": [
+            {
+                "idTipoDocumento": item.idTipoDocumento,
+                "acronimo": item.Acronimo,
+                "nombre": item.nombre,
+            }
+            for item in tipos_documento
         ],
     }), 200
