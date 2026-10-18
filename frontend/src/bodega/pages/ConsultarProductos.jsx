@@ -13,6 +13,7 @@ export default function ConsultarProductos() {
   const [sel, setSel] = useState(null);
   const [editando, setEditando] = useState(false);
   const [borrador, setBorrador] = useState({});
+  const [error, setError] = useState("");
   const [aviso, Aviso] = useAviso();
   const [pedirConfirmacion, Confirmacion] = useConfirmacion();
 
@@ -21,10 +22,34 @@ export default function ConsultarProductos() {
   const visibles = filtrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
 
   const buscar = () => { setBusca(q); setPagina(1); };
-  const abrir = (p, edit) => { setSel(p); setEditando(edit); setBorrador({ stock: p.stock, venta: p.venta, compra: p.compra, estado: p.estado }); };
-  const guardar = () => {
-    actualizarProducto(sel.codigo, { stock: Number(borrador.stock), venta: Number(borrador.venta), compra: Number(borrador.compra), estado: borrador.estado });
-    setSel(null); aviso("Producto actualizado");
+  const abrir = (p, edit) => {
+    setSel(p);
+    setEditando(edit);
+    setError("");
+    setBorrador({ stock: p.stock, venta: p.venta, compra: p.compra, motivo: "" });
+  };
+  const guardar = async () => {
+    setError("");
+    if (Number(borrador.venta) < 0.01 || Number(borrador.compra) < 0.01) {
+      setError("Los precios de compra y venta deben ser mayores que cero.");
+      return;
+    }
+    if (Number(borrador.stock) !== sel.stock && !borrador.motivo.trim()) {
+      setError("Indica el motivo requerido para ajustar el stock.");
+      return;
+    }
+    try {
+      await actualizarProducto(sel.codigo, {
+        stock: Number(borrador.stock),
+        venta: Number(borrador.venta),
+        compra: Number(borrador.compra),
+        motivo: borrador.motivo,
+      });
+      setSel(null);
+      aviso("Producto actualizado");
+    } catch (err) {
+      setError(err?.response?.data?.mensaje || err?.response?.data?.error || err.message || "No se pudo actualizar el producto.");
+    }
   };
   const borrar = (p) =>
     pedirConfirmacion(
@@ -67,11 +92,14 @@ export default function ConsultarProductos() {
           {editando ? (
             <div className="space-y-3 text-sm">
               {[["Stock", "stock"], ["Precio de venta", "venta"], ["Precio de compra", "compra"]].map(([l, k]) => (
-                <label key={k} className="block">{l}<input type="number" min="0" className="input mt-1" value={borrador[k]} onChange={(e) => setBorrador({ ...borrador, [k]: e.target.value })} /></label>
+                <label key={k} className="block">{l}<input type="number" min={k === "stock" ? "0" : "0.01"} step="0.01" className="input mt-1" value={borrador[k]} onChange={(e) => setBorrador({ ...borrador, [k]: e.target.value })} /></label>
               ))}
-              <label className="block">Estado
-                <select className="input mt-1" value={borrador.estado} onChange={(e) => setBorrador({ ...borrador, estado: e.target.value })}><option>Activo</option><option>Inactivo</option></select>
-              </label>
+              {Number(borrador.stock) !== sel.stock && (
+                <label className="block">Motivo del ajuste de stock
+                  <textarea className="input mt-1" value={borrador.motivo} onChange={(e) => setBorrador({ ...borrador, motivo: e.target.value })} />
+                </label>
+              )}
+              {error && <p className="text-sm text-red-400">{error}</p>}
               <div className="flex justify-end gap-2"><button className="btn-ghost" onClick={() => setSel(null)}>Cancelar</button><button className="btn-primary" onClick={guardar}>Guardar cambios</button></div>
             </div>
           ) : (

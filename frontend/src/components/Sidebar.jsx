@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import {
-  Home, Package, FileText, DollarSign, BarChart2, Users, ChevronDown,
+  Home, Package, FileText, DollarSign, BarChart2, Users, Truck, ChevronDown,
 } from 'lucide-react'
 import { menuItems } from '../data/mockData'
 import logo from '../assets/logo.png'
 
-const iconMap = { Home, Package, FileText, DollarSign, BarChart2, Users }
+const iconMap = { Home, Package, FileText, DollarSign, BarChart2, Users, Truck }
 
 // Un ítem de submenú puede ser:
 // - un texto simple (hoja sin página propia todavía)
@@ -86,6 +86,7 @@ export default function Sidebar({ activePage, onNavigate, sucursales = [] }) {
     ...item,
     children: [
       { label: 'Inventario global', page: 'inventario-global' },
+      { label: 'Kardex de mercancía', page: 'kardex' },
       ...sucursales.map((sucursal) => ({
         label: sucursal.nombreSucursal,
         page: `inventario-sucursal-${sucursal.idSucursal}`,

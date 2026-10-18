@@ -1,15 +1,20 @@
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import text
 
 from app import create_app
 from app.extensions import db
+from app.models.cliente import Cliente
 from app.models.detalle_venta import DetalleVenta
 from app.models.factura import Factura
 from app.models.inventario import Inventario
 from app.models.metodo_pago import MetodoPago
 from app.models.producto import Producto
+from app.models.tipo_movimiento import TipoMovimiento
 from app.models.tipo_venta import TipoVenta
+from app.models.transaccion_inventario import TransaccionInventario
+from app.models.usuario import Usuario
 from app.models.venta import Venta
 from app.schemas.venta_schema import venta_input_schema, venta_output_schema
 from app.services.venta_service import VentaService
@@ -29,12 +34,30 @@ def app():
 		Inventario.__table__,
 		TipoVenta.__table__,
 		MetodoPago.__table__,
+		Usuario.__table__,
+		Cliente.__table__,
 		Venta.__table__,
 		DetalleVenta.__table__,
 		Factura.__table__,
+		TipoMovimiento.__table__,
 	]
 	with application.app_context():
 		db.metadata.create_all(bind=db.engine, tables=tables)
+		db.session.execute(text('''
+			CREATE TABLE "TransaccionInventario" (
+				"idTransaccionInventario" INTEGER PRIMARY KEY,
+				"idInventario" INTEGER NOT NULL,
+				"idTipoMovimiento" INTEGER NOT NULL,
+				"idVenta" INTEGER,
+				"idDevolucion" INTEGER,
+				"idPedidoProveedor" INTEGER,
+				"idAjusteInventario" INTEGER,
+				"cantidad" NUMERIC(12, 3) NOT NULL,
+				"stockAnterior" NUMERIC(12, 3),
+				"stockNuevo" NUMERIC(12, 3),
+				"fecha" DATETIME NOT NULL
+			)
+		'''))
 		db.session.add_all([
 			Producto(
 				idProducto=1,
@@ -52,10 +75,25 @@ def app():
 			),
 			TipoVenta(idTipoVenta=1, nombre="Mostrador"),
 			MetodoPago(idMetodoPago=1, nombre="Efectivo"),
+			TipoMovimiento(idTipoMovimiento=1, nombre="Entrada"),
+			TipoMovimiento(idTipoMovimiento=2, nombre="Salida"),
+			Usuario(
+				idUsuario=7,
+				idTipoDocumento=1,
+				numeroDocumento="TEST-7",
+				primerNombre="Ana",
+				segundoNombre="María",
+				primerApellido="Pérez",
+				segundoApellido="López",
+				correoElectronico="ana.perez@example.test",
+				idTipoUsuario=1,
+				password_hash="not-used-in-tests",
+			),
 		])
 		db.session.commit()
 		yield application
 		db.session.remove()
+		db.session.execute(text('DROP TABLE "TransaccionInventario"'))
 		db.metadata.drop_all(bind=db.engine, tables=tables)
 
 
@@ -92,7 +130,17 @@ def test_registrar_venta_persiste_modelos_y_descuenta_stock(app):
 		assert venta.detalles[0].descuento == Decimal("0.00")
 		assert venta.factura.valorTotal == Decimal("14.00")
 		assert db.session.get(Inventario, 1).CantidadDisponible == Decimal("8.50")
-		assert venta_output_schema.dump(venta)["detalles"][0]["nombreProducto"] == "Taladro"
+		movimiento = db.session.query(TransaccionInventario).one()
+		assert movimiento.idVenta == venta.idVenta
+		assert movimiento.idTipoMovimiento == 2
+		assert movimiento.cantidad == Decimal("1.50")
+		assert movimiento.stockAnterior == Decimal("10.00")
+		assert movimiento.stockNuevo == Decimal("8.50")
+		respuesta = venta_output_schema.dump(venta)
+		assert respuesta["detalles"][0]["nombreProducto"] == "Taladro"
+		assert respuesta["nombreVendedor"] == "Ana María Pérez López"
+		assert respuesta["activo"] is True
+		assert respuesta["factura"]["activo"] is True
 
 
 def test_vendedor_no_puede_vender_en_otra_sucursal(app):
@@ -133,6 +181,17 @@ def test_endpoints_venta_post_lista_detalle_y_factura(app):
 	from flask_jwt_extended import create_access_token
 
 	with app.app_context():
+		cliente = Cliente(
+			idTipoDocumento=1,
+			numeroDocumento="CLIENTE-1",
+			primerNombre="Laura",
+			segundoNombre="María",
+			primerApellido="Gómez",
+			segundoApellido="Ríos",
+		)
+		db.session.add(cliente)
+		db.session.commit()
+		id_cliente = cliente.idCliente
 		token = create_access_token(
 			identity="7",
 			additional_claims={"rol": "admin", "idSucursal": None},
@@ -140,22 +199,38 @@ def test_endpoints_venta_post_lista_detalle_y_factura(app):
 
 	client = app.test_client()
 	headers = {"Authorization": f"Bearer {token}"}
-	respuesta = client.post("/api/ventas", json=payload_venta(), headers=headers)
+	respuesta = client.post("/api/ventas", json=payload_venta(idCliente=id_cliente), headers=headers)
 
 	assert respuesta.status_code == 201
 	id_venta = respuesta.json["data"]["idVenta"]
 	assert respuesta.json["data"]["factura"]["total"] == 14.0
+	assert respuesta.json["data"]["nombreVendedor"] == "Ana María Pérez López"
+	assert respuesta.json["data"]["nombreCliente"] == "Laura María Gómez Ríos"
 
 	lista = client.get("/api/ventas?pagina=1&por_pagina=10", headers=headers)
 	detalle = client.get(f"/api/ventas/{id_venta}", headers=headers)
 	factura = client.get(f"/api/ventas/{id_venta}/factura", headers=headers)
+	usuarios = client.get("/api/usuarios/nombres", headers=headers)
+	cliente_respuesta = client.get(f"/api/clientes/{id_cliente}", headers=headers)
 
 	assert lista.status_code == 200
 	assert lista.json["paginacion"]["total"] == 1
+	assert lista.json["data"][0]["activo"] is True
+	assert lista.json["data"][0]["nombreVendedor"] == "Ana María Pérez López"
+	assert lista.json["data"][0]["nombreCliente"] == "Laura María Gómez Ríos"
 	assert detalle.status_code == 200
 	assert detalle.json["idVenta"] == id_venta
 	assert factura.status_code == 200
 	assert factura.json["total"] == 14.0
+	assert factura.json["activo"] is True
+	assert cliente_respuesta.status_code == 200
+	assert cliente_respuesta.json["primerNombre"] == "Laura"
+	assert cliente_respuesta.json["primerApellido"] == "Gómez"
+	assert usuarios.status_code == 200
+	assert usuarios.json["data"][0] == {
+		"idUsuario": 7,
+		"nombre": "Ana María Pérez López",
+	}
 
 
 def test_ruta_post_rechaza_sucursal_distinta_del_claim(app):

@@ -1,4 +1,4 @@
-import { Home, Truck, Package, BarChart3, TriangleAlert } from "lucide-react";
+import { Home, Truck, Package, BarChart3, TriangleAlert, History } from "lucide-react";
 import RoleLayout from "../../components/RoleLayout.jsx";
 
 // Cada "page" es la clave que usa BodegaApp.jsx para elegir la página.
@@ -11,6 +11,7 @@ const navigation = [
   ] },
   { label: "Inventario", icon: BarChart3, defaultOpen: true, children: [
     { label: "Existencias", page: "inventario" },
+    { label: "Kardex de mercancía", page: "kardex", icon: History },
     { label: "Ajuste de inventario", page: "ajuste" },
   ] },
   { label: "Mercancía dañada", icon: TriangleAlert, children: [

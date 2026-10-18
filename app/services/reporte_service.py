@@ -676,9 +676,15 @@ REPORTES: dict[str, dict] = {
         "parametros": [],
         "consolidable": False,  # siempre mira todas las sucursales autorizadas
     },
+    "compras": {
+        "nombre": "Reporte de compras a proveedores",
+        "descripcion": "Órdenes de compra por período, proveedor, estado, sucursal y producto. Refleja pedidos, no pagos.",
+        "parametros": ["idProveedor", "limite"],
+        "consolidable": True,
+    },
 }
 
-# Reportes del requerimiento que requieren tablas que aún no están en el modelo.
+# Reportes que requieren datos que aún no están en el modelo.
 REPORTES_PENDIENTES: dict[str, dict] = {
     "ingresos-egresos": {
         "nombre": "Reporte de ingresos y egresos",
@@ -691,12 +697,7 @@ REPORTES_PENDIENTES: dict[str, dict] = {
     },
     "inventario-movimientos": {
         "nombre": "Kardex de movimientos de mercancía",
-        "requiere": "Tabla de movimientos de inventario (entradas/salidas/ajustes). Hoy `Inventario` "
-                    "solo guarda el saldo actual por sucursal y producto.",
-    },
-    "compras": {
-        "nombre": "Reporte de compras a proveedores",
-        "requiere": "Tabla de compras y un modelo de proveedor.",
+        "requiere": "La integración como reporte tabular de `/api/v1/reportes` está pendiente; el Kardex operativo ya está disponible en `/api/inventario/movimientos`.",
     },
 }
 
@@ -746,6 +747,7 @@ TITULOS = {
     "ventas-por-producto": "Reporte de ventas por producto",
     "inventario-existencias": "Reporte de existencias de mercancía",
     "consolidado-sucursales": "Consolidado comparativo por sucursal",
+    "compras": "Reporte de compras a proveedores",
 }
 
 
@@ -1740,6 +1742,234 @@ def reporte_consolidado_sucursales(db, alcance, desde, hasta) -> dict:
                  [seccion_comparativa, seccion_facturacion], kpis,
                  descripcion="Todas las sucursales autorizadas, ordenadas por ventas netas.")
 
+
+# =========================================================================== 7. COMPRAS A PROVEEDORES
+def reporte_compras(db, alcance, desde, hasta, *, idProveedor=None, limite=None) -> dict:
+    """Resume órdenes de compra creadas durante el periodo y sucursales autorizadas."""
+    PedidoProveedor = modelo("PedidoProveedor")
+    DetalleOrdenProveedor = modelo("DetalleOrdenProveedor")
+    EstadoPedidoProveedor = modelo("EstadoPedidoProveedor")
+    Proveedor = modelo("Proveedor")
+    Producto = modelo("Producto")
+    Sucursal = modelo("Sucursal")
+
+    ini, fin = rango_datetime(db, desde, hasta)
+    condiciones = [PedidoProveedor.fechaPedido.between(ini, fin)]
+    if idProveedor is not None:
+        condiciones.append(PedidoProveedor.idProveedor == idProveedor)
+
+    def consulta_pedidos():
+        return (
+            db.session.query(PedidoProveedor)
+            .filter(*condiciones)
+            .filter(PedidoProveedor.idSucursal.in_(alcance.ids))
+        )
+
+    total_pedidos = consulta_pedidos().count()
+    limite_filas = _limite_detalle(limite)
+    cancelado = EstadoPedidoProveedor.nombre == "Cancelado"
+    abierto = EstadoPedidoProveedor.nombre.in_(("Pendiente", "Parcial"))
+    resumen_estado = (
+        db.session.query(
+            EstadoPedidoProveedor.nombre,
+            func.count(PedidoProveedor.idPedidoProveedor),
+            func.coalesce(func.sum(PedidoProveedor.total), 0),
+        )
+        .select_from(PedidoProveedor)
+        .join(EstadoPedidoProveedor, PedidoProveedor.idEstadoPedidoProveedor == EstadoPedidoProveedor.idEstadoPedidoProveedor)
+        .filter(*condiciones)
+        .filter(PedidoProveedor.idSucursal.in_(alcance.ids))
+        .group_by(EstadoPedidoProveedor.nombre)
+        .order_by(EstadoPedidoProveedor.nombre)
+        .all()
+    )
+    filas_estado = [[nombre, int(cantidad), monto] for nombre, cantidad, monto in resumen_estado]
+    totales_estado = [
+        "TOTAL",
+        sum(fila[1] for fila in filas_estado),
+        sum((fila[2] for fila in filas_estado), Decimal("0.00")),
+    ]
+
+    resumen_proveedor = (
+        db.session.query(
+            Proveedor.nombreEmpresa,
+            func.count(PedidoProveedor.idPedidoProveedor),
+            func.coalesce(func.sum(
+                case((~cancelado, PedidoProveedor.total), else_=0)
+            ), 0),
+            func.coalesce(func.sum(
+                case((cancelado, PedidoProveedor.total), else_=0)
+            ), 0),
+            func.coalesce(func.sum(case((abierto, 1), else_=0)), 0),
+        )
+        .select_from(PedidoProveedor)
+        .join(EstadoPedidoProveedor, PedidoProveedor.idEstadoPedidoProveedor == EstadoPedidoProveedor.idEstadoPedidoProveedor)
+        .join(Proveedor, PedidoProveedor.idProveedor == Proveedor.idProveedor)
+        .filter(*condiciones)
+        .filter(PedidoProveedor.idSucursal.in_(alcance.ids))
+        .group_by(Proveedor.idProveedor, Proveedor.nombreEmpresa)
+        .order_by(func.sum(case((~cancelado, PedidoProveedor.total), else_=0)).desc(),
+                  Proveedor.nombreEmpresa)
+        .limit(limite_filas)
+        .all()
+    )
+    filas_proveedor = [
+        [nombre, int(cantidad), int(pendientes), valor_activo, valor_cancelado]
+        for nombre, cantidad, valor_activo, valor_cancelado, pendientes in resumen_proveedor
+    ]
+    totales_proveedor = [
+        "TOTAL",
+        sum(fila[1] for fila in filas_proveedor),
+        sum(fila[2] for fila in filas_proveedor),
+        sum((fila[3] for fila in filas_proveedor), Decimal("0.00")),
+        sum((fila[4] for fila in filas_proveedor), Decimal("0.00")),
+    ]
+
+    productos_pedidos = (
+        db.session.query(
+            Producto.nombre,
+            Producto.codigoSKU,
+            func.coalesce(func.sum(DetalleOrdenProveedor.cantidadPedida), 0),
+            func.coalesce(func.sum(DetalleOrdenProveedor.cantidadRecibida), 0),
+            func.coalesce(func.sum(DetalleOrdenProveedor.subtotal), 0),
+        )
+        .join(DetalleOrdenProveedor, DetalleOrdenProveedor.idProducto == Producto.idProducto)
+        .join(PedidoProveedor, DetalleOrdenProveedor.idPedidoProveedor == PedidoProveedor.idPedidoProveedor)
+        .join(EstadoPedidoProveedor, PedidoProveedor.idEstadoPedidoProveedor == EstadoPedidoProveedor.idEstadoPedidoProveedor)
+        .filter(*condiciones, ~cancelado)
+        .filter(PedidoProveedor.idSucursal.in_(alcance.ids))
+        .group_by(Producto.idProducto, Producto.nombre, Producto.codigoSKU)
+        .order_by(func.sum(DetalleOrdenProveedor.subtotal).desc(), Producto.nombre)
+        .limit(limite_filas)
+        .all()
+    )
+    filas_productos = [list(fila) for fila in productos_pedidos]
+    totales_productos = [
+        "TOTAL",
+        "",
+        sum((fila[2] for fila in filas_productos), Decimal("0.00")),
+        sum((fila[3] for fila in filas_productos), Decimal("0.00")),
+        sum((fila[4] for fila in filas_productos), Decimal("0.00")),
+    ]
+
+    detalle_query = (
+        db.session.query(
+            PedidoProveedor.idPedidoProveedor,
+            PedidoProveedor.fechaPedido,
+            Proveedor.nombreEmpresa,
+            Sucursal.nombreSucursal,
+            EstadoPedidoProveedor.nombre,
+            PedidoProveedor.total,
+        )
+        .select_from(PedidoProveedor)
+        .join(EstadoPedidoProveedor, PedidoProveedor.idEstadoPedidoProveedor == EstadoPedidoProveedor.idEstadoPedidoProveedor)
+        .join(Proveedor, PedidoProveedor.idProveedor == Proveedor.idProveedor)
+        .join(Sucursal, PedidoProveedor.idSucursal == Sucursal.idSucursal)
+        .filter(*condiciones)
+        .filter(PedidoProveedor.idSucursal.in_(alcance.ids))
+        .order_by(PedidoProveedor.fechaPedido.desc(), PedidoProveedor.idPedidoProveedor.desc())
+        .limit(limite_filas)
+        .all()
+    )
+    columnas_detalle = [
+        columna("pedido", "Orden", "entero", totalizar=False),
+        columna("fecha", "Fecha", "fecha"),
+        columna("proveedor", "Proveedor"),
+    ]
+    if alcance.es_consolidado:
+        columnas_detalle.append(columna("sucursal", "Sucursal"))
+    columnas_detalle.extend([
+        columna("estado", "Estado"),
+        col_moneda("total", "Total de la orden", totalizar=True),
+    ])
+    filas_detalle = []
+    for id_pedido, fecha, proveedor, sucursal, estado, total in detalle_query:
+        fila = [id_pedido, fecha, proveedor]
+        if alcance.es_consolidado:
+            fila.append(sucursal)
+        fila.extend([estado, total])
+        filas_detalle.append(fila)
+    totales_detalle = totales_por_clave(
+        columnas_detalle,
+        pedido="TOTAL",
+        total=sum((fila[-1] for fila in filas_detalle), Decimal("0.00")),
+    )
+
+    total_activo, total_cancelado, cantidad_pendientes = (
+        db.session.query(
+            func.coalesce(func.sum(case((~cancelado, PedidoProveedor.total), else_=0)), 0),
+            func.coalesce(func.sum(case((cancelado, PedidoProveedor.total), else_=0)), 0),
+            func.coalesce(func.sum(case((abierto, 1), else_=0)), 0),
+        )
+        .select_from(PedidoProveedor)
+        .join(EstadoPedidoProveedor, PedidoProveedor.idEstadoPedidoProveedor == EstadoPedidoProveedor.idEstadoPedidoProveedor)
+        .filter(*condiciones)
+        .filter(PedidoProveedor.idSucursal.in_(alcance.ids))
+        .one()
+    )
+    proveedores_unicos = (
+        consulta_pedidos()
+        .with_entities(func.count(func.distinct(PedidoProveedor.idProveedor)))
+        .scalar()
+    ) or 0
+
+    kpis = [
+        kpi("Órdenes registradas", total_pedidos, tipo="entero"),
+        kpi("Proveedores con órdenes", proveedores_unicos, tipo="entero"),
+        kpi("Órdenes pendientes o parciales", int(cantidad_pendientes), tipo="entero"),
+        kpi("Valor de órdenes no canceladas", total_activo),
+        kpi("Valor de órdenes canceladas", total_cancelado),
+    ]
+    filtros = {"idProveedor": idProveedor}
+    return _base(
+        "compras",
+        alcance,
+        desde,
+        hasta,
+        [
+            seccion(
+                "Resumen por estado",
+                [columna("estado", "Estado"), col_entero("ordenes", "Órdenes"),
+                 col_moneda("valor", "Valor ordenado")],
+                filas_estado,
+                totales=totales_estado,
+            ),
+            seccion(
+                "Resumen por proveedor",
+                [columna("proveedor", "Proveedor"),
+                 col_entero("ordenes", "Órdenes"),
+                 col_entero("pendientes", "Pendientes o parciales"),
+                 col_moneda("valor_activo", "Valor no cancelado"),
+                 col_moneda("valor_cancelado", "Valor cancelado")],
+                filas_proveedor,
+                totales=totales_proveedor,
+                nota=f"Se muestran hasta {limite_filas} proveedores; las órdenes canceladas se informan por separado.",
+            ),
+            seccion(
+                "Productos solicitados (órdenes no canceladas)",
+                [columna("producto", "Producto"),
+                 columna("codigo", "Código"),
+                 col_cantidad("cantidad_pedida", "Cantidad pedida", ancho=1.2),
+                 col_cantidad("cantidad_recibida", "Cantidad recibida", ancho=1.2),
+                 col_moneda("subtotal", "Valor solicitado")],
+                filas_productos,
+                totales=totales_productos,
+                nota=f"Se muestran hasta {limite_filas} productos. Las cantidades recibidas reflejan lo registrado en cada orden; el reporte no contabiliza pagos ni ajusta existencias.",
+            ),
+            seccion(
+                f"Detalle de órdenes ({len(filas_detalle)} de {total_pedidos})",
+                columnas_detalle,
+                filas_detalle,
+                totales=totales_detalle,
+                nota=f"El detalle se limita a {limite_filas} órdenes. Filtre por proveedor o período para acotar la consulta.",
+            ),
+        ],
+        kpis,
+        filtros=filtros,
+        descripcion="Órdenes a proveedores por fecha de creación y sucursales autorizadas; los valores son compromisos de compra, no pagos realizados.",
+    )
+
+
 # =============================================================================
 # 8. REGISTRO DE IMPLEMENTACIONES
 # =============================================================================
@@ -1751,6 +1981,7 @@ IMPLEMENTACIONES: dict[str, Any] = {
     "ventas-por-producto": reporte_ventas_por_producto,
     "inventario-existencias": reporte_inventario_existencias,
     "consolidado-sucursales": reporte_consolidado_sucursales,
+    "compras": reporte_compras,
 }
 
 
@@ -1759,8 +1990,8 @@ def catalogo_implementacion(codigo: str):
     Devuelve la función que genera el reporte pedido.
 
     Valida primero contra el catálogo, así un código inexistente o un reporte
-    pendiente (por ejemplo, "ingresos-egresos" mientras no exista la tabla de
-    tesorería) devuelve un mensaje claro en lugar de un error del servidor.
+    pendiente (por ejemplo, "ingresos-egresos" si no hay datos adecuados) devuelve
+    un mensaje claro en lugar de un error del servidor.
     """
     catalogo_metadatos(codigo)
     funcion = IMPLEMENTACIONES.get(codigo)

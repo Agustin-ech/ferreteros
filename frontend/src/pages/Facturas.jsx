@@ -1,17 +1,18 @@
 import FacturasLista from '../components/FacturasLista'
 
-export default function Facturas({ facturas, onAnularFactura, onAgregarFactura }) {
+export default function Facturas({ facturas, sucursales, ventasCargando, errorVentas }) {
   return (
     <FacturasLista
       facturas={facturas}
-      onAnularFactura={onAnularFactura}
-      onAgregarFactura={onAgregarFactura}
+      sucursales={sucursales}
+      cargando={ventasCargando}
+      error={errorVentas}
       titulo="Facturas"
-      subtitulo="Consulta y gestiona todas las facturas del sistema."
+      subtitulo="Consulta las facturas emitidas por las ventas registradas."
       mostrarResumen
       mostrarCheckbox
       itemsPorPagina={5}
-      botonAccion="nueva"
+      botonAccion={null}
     />
   )
 }

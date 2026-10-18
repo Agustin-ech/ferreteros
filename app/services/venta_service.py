@@ -25,7 +25,9 @@ from app.models.factura import Factura
 from app.models.inventario import Inventario
 from app.models.metodo_pago import MetodoPago
 from app.models.producto import Producto
+from app.models.tipo_movimiento import TipoMovimiento
 from app.models.tipo_venta import TipoVenta
+from app.models.transaccion_inventario import TransaccionInventario
 from app.models.venta import Venta
 
 class VentaService:
@@ -153,8 +155,25 @@ class VentaService:
                     )
                 )
 
+            tipo_salida = db.session.scalar(
+                select(TipoMovimiento).where(TipoMovimiento.nombre == "Salida")
+            )
+            if tipo_salida is None:
+                raise ValueError("No está configurado el tipo de movimiento 'Salida'.")
+
             for id_producto, cantidad in cantidades_por_producto.items():
-                inventarios_por_producto[id_producto].CantidadDisponible -= cantidad
+                inventario = inventarios_por_producto[id_producto]
+                stock_anterior = Decimal(str(inventario.CantidadDisponible))
+                inventario.CantidadDisponible -= cantidad
+                db.session.add(TransaccionInventario(
+                    idInventario=inventario.idInventario,
+                    idTipoMovimiento=tipo_salida.idTipoMovimiento,
+                    idVenta=nueva_venta.idVenta,
+                    cantidad=cantidad,
+                    stockAnterior=stock_anterior,
+                    stockNuevo=Decimal(str(inventario.CantidadDisponible)),
+                    fecha=nueva_venta.fechaHora,
+                ))
 
             nueva_venta.factura = VentaService.generar_factura(nueva_venta)
             if confirmar:
@@ -191,6 +210,8 @@ class VentaService:
             consulta.options(
                 selectinload(Venta.detalles).joinedload(DetalleVenta.producto),
                 joinedload(Venta.factura),
+                joinedload(Venta.cliente),
+                joinedload(Venta.usuario),
             )
             .order_by(Venta.fechaHora.desc(), Venta.idVenta.desc())
             .offset((pagina - 1) * por_pagina)
@@ -205,6 +226,8 @@ class VentaService:
             consulta.options(
                 selectinload(Venta.detalles).joinedload(DetalleVenta.producto),
                 joinedload(Venta.factura),
+                joinedload(Venta.cliente),
+                joinedload(Venta.usuario),
             )
         )
 

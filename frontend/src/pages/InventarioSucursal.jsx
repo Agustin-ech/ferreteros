@@ -68,8 +68,8 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
       inventario.map((item) => [item.idProducto, Number(item.cantidadDisponible || 0)])
     )
 
-    return productos.map((producto) => {
-      const stock = stockPorProducto[producto.idProducto] || 0
+    return productos.filter((producto) => Object.hasOwn(stockPorProducto, producto.idProducto)).map((producto) => {
+      const stock = stockPorProducto[producto.idProducto]
       return {
         id: producto.idProducto,
         codigo: producto.codigoSKU,
@@ -141,9 +141,6 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
     })
   }
 
-  if (cargando) return <div className="text-sm text-gray-400">Cargando inventario de {nombreSucursal}...</div>
-  if (error) return <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</div>
-
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -151,6 +148,14 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
         <p className="text-sm text-gray-500">Consultar y gestionar el inventario de la sucursal {nombreSucursal}.</p>
       </div>
 
+      {cargando && <p className="text-sm text-gray-400">Cargando inventario de {nombreSucursal}...</p>}
+      {!cargando && error && (
+        <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+          {error}
+        </p>
+      )}
+      {!cargando && !error && (
+        <>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
           icon={Package}
@@ -308,6 +313,8 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
           />
         )}
       </div>
+        </>
+      )}
     </div>
   )
 }

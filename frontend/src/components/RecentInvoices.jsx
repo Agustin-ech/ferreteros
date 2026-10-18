@@ -1,5 +1,4 @@
 import { Receipt } from 'lucide-react'
-import { facturasRecientes as facturasRecientesEjemplo } from '../data/mockData'
 
 const formatoCOP = new Intl.NumberFormat('es-CO', {
   style: 'currency',
@@ -7,7 +6,7 @@ const formatoCOP = new Intl.NumberFormat('es-CO', {
   maximumFractionDigits: 0,
 })
 
-export default function RecentInvoices({ facturasRecientes = facturasRecientesEjemplo }) {
+export default function RecentInvoices({ facturasRecientes = [], cargando = false, error = '' }) {
   return (
     <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">
       <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -36,6 +35,23 @@ export default function RecentInvoices({ facturasRecientes = facturasRecientesEj
                 <td className="py-2 text-right text-gray-500">{f.fecha}</td>
               </tr>
             ))}
+            {cargando && (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-gray-500">Cargando facturas…</td>
+              </tr>
+            )}
+            {!cargando && error && (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-red-400">{error}</td>
+              </tr>
+            )}
+            {!cargando && !error && facturasRecientes.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-gray-500">
+                  No hay facturas recientes.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

@@ -12,7 +12,16 @@ const ITEMS_POR_PAGINA = 7
 
 // Lista de empleados. `empleados` y `onAgregarEmpleado` los pasa App.jsx
 // (ver comentario ahí), así que un empleado nuevo aparece aquí sin recargar.
-export default function Empleados({ empleados = [], onNavigate, onEditarEmpleado, onEliminarEmpleado }) {
+export default function Empleados({
+  empleados = [],
+  onNavigate,
+  onEditarEmpleado,
+  roles = [],
+  sucursales = [],
+  tiposDocumento = [],
+  cargando = false,
+  errorCarga = '',
+}) {
   const [busqueda, setBusqueda] = useState('')
   const [sucursal, setSucursal] = useState('Todas')
   const [rol, setRol] = useState('Todos')
@@ -20,8 +29,9 @@ export default function Empleados({ empleados = [], onNavigate, onEditarEmpleado
   const [pagina, setPagina] = useState(1)
   const [seleccionado, setSeleccionado] = useState(null)
   const [edicionInicial, setEdicionInicial] = useState(false)
+  const [errorAccion, setErrorAccion] = useState('')
 
-  const roles = useMemo(() => ['Todos', ...new Set(empleados.map((e) => e.cargo))], [empleados])
+  const rolesLista = useMemo(() => ['Todos', ...new Set(empleados.map((e) => e.rolSistema))], [empleados])
 
   function cambiarFiltro(setter) {
     return (valor) => {
@@ -30,14 +40,23 @@ export default function Empleados({ empleados = [], onNavigate, onEditarEmpleado
     }
   }
 
+  async function cambiarEstado(empleado) {
+    setErrorAccion('')
+    try {
+      await onEditarEmpleado?.(empleado.idUsuario, { activo: empleado.estado !== 'Activo' })
+    } catch (error) {
+      setErrorAccion(error?.response?.data?.mensaje || error?.response?.data?.error || error.message || 'No se pudo actualizar el estado del empleado.')
+    }
+  }
+
   const filas = useMemo(() => {
     let filas = empleados
     if (busqueda.trim()) {
       const q = busqueda.trim().toLowerCase()
-      filas = filas.filter((e) => e.nombre.toLowerCase().includes(q) || e.id.includes(q))
+      filas = filas.filter((e) => e.nombre.toLowerCase().includes(q) || e.id.includes(q) || e.cedula.includes(q))
     }
     if (sucursal !== 'Todas') filas = filas.filter((e) => e.sucursal === sucursal)
-    if (rol !== 'Todos') filas = filas.filter((e) => e.cargo === rol)
+    if (rol !== 'Todos') filas = filas.filter((e) => e.rolSistema === rol)
     if (estado !== 'Todos') filas = filas.filter((e) => e.estado === estado)
     return filas
   }, [empleados, busqueda, sucursal, rol, estado])
@@ -53,9 +72,13 @@ export default function Empleados({ empleados = [], onNavigate, onEditarEmpleado
         empleado={seleccionado}
         edicionInicial={edicionInicial}
         onVolver={() => setSeleccionado(null)}
-        onGuardar={(datos) => {
-          onEditarEmpleado?.(seleccionado.id, datos)
-          setSeleccionado(null)
+        roles={roles}
+        sucursales={sucursales}
+        tiposDocumento={tiposDocumento}
+        onGuardar={async (datos) => {
+          const actualizado = await onEditarEmpleado?.(seleccionado.idUsuario, datos)
+          setSeleccionado(actualizado)
+          return actualizado
         }}
       />
     )
@@ -82,6 +105,8 @@ export default function Empleados({ empleados = [], onNavigate, onEditarEmpleado
         </button>
       </div>
 
+      {errorCarga && <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{errorCarga}</p>}
+
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="text"
@@ -92,11 +117,10 @@ export default function Empleados({ empleados = [], onNavigate, onEditarEmpleado
         />
         <select value={sucursal} onChange={(e) => cambiarFiltro(setSucursal)(e.target.value)} className="bg-panel-card border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none">
           <option>Todas</option>
-          <option>La Chinita</option>
-          <option>Buenavista</option>
+          {sucursales.map((item) => <option key={item.idSucursal}>{item.nombreSucursal}</option>)}
         </select>
         <select value={rol} onChange={(e) => cambiarFiltro(setRol)(e.target.value)} className="bg-panel-card border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none">
-          {roles.map((r) => (
+          {rolesLista.map((r) => (
             <option key={r}>{r}</option>
           ))}
         </select>
@@ -139,12 +163,7 @@ export default function Empleados({ empleados = [], onNavigate, onEditarEmpleado
                       acciones={[
                         {
                           label: e.estado === 'Activo' ? 'Desactivar' : 'Activar',
-                          onClick: () => onEditarEmpleado?.(e.id, { estado: e.estado === 'Activo' ? 'Inactivo' : 'Activo' }),
-                        },
-                        {
-                          label: 'Eliminar empleado',
-                          destructivo: true,
-                          onClick: () => onEliminarEmpleado?.(e.id),
+                          onClick: () => cambiarEstado(e),
                         },
                       ]}
                     />
@@ -160,6 +179,9 @@ export default function Empleados({ empleados = [], onNavigate, onEditarEmpleado
           </tbody>
         </table>
       </div>
+
+      {errorAccion && <p role="alert" className="text-sm text-red-300">{errorAccion}</p>}
+      {cargando && <p role="status" className="text-sm text-gray-400">Cargando empleados…</p>}
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-gray-400">
         <span>Mostrando {filas.length === 0 ? 0 : inicio + 1}-{Math.min(inicio + ITEMS_POR_PAGINA, filas.length)} de {filas.length} empleados</span>

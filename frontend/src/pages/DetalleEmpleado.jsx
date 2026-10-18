@@ -1,118 +1,152 @@
 import { useState } from 'react'
 import { ArrowLeft, UserRound, Pencil, Save, X } from 'lucide-react'
-import { modulosSistema, asistencia } from '../data/mockData'
 
-const CARGOS = ['Vendedor', 'Cajero', 'Bodega', 'Administrador']
-const ROLES_SISTEMA = ['Administrador', 'Cajero', 'Vendedor', 'Bodeguero']
-
-// Vista de un empleado: por defecto solo lectura, con un botón "Editar"
-// que activa el formulario en el sitio (no navega a otra pantalla). Al
-// entrar desde el lápiz de la lista, `edicionInicial` llega en true.
-export default function DetalleEmpleado({ empleado, edicionInicial = false, onVolver, onGuardar }) {
+export default function DetalleEmpleado({
+  empleado,
+  edicionInicial = false,
+  onVolver,
+  onGuardar,
+  roles = [],
+  tiposDocumento = [],
+  sucursales = [],
+}) {
   const [editando, setEditando] = useState(edicionInicial)
   const [form, setForm] = useState({ ...empleado })
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
 
   function actualizar(campo, valor) {
     setForm((prev) => ({ ...prev, [campo]: valor }))
   }
 
-  function handleGuardar(e) {
-    e.preventDefault()
-    onGuardar(form)
-    setEditando(false)
+  async function handleGuardar(event) {
+    event.preventDefault()
+    setError('')
+    setGuardando(true)
+    try {
+      const actualizado = await onGuardar({
+        idTipoDocumento: Number(form.idTipoDocumento),
+        numeroDocumento: form.numeroDocumento,
+        primerNombre: form.primerNombre,
+        segundoNombre: form.segundoNombre || null,
+        primerApellido: form.primerApellido,
+        segundoApellido: form.segundoApellido || null,
+        correoElectronico: form.correoElectronico,
+        telefono: form.telefono || null,
+        idTipoUsuario: Number(form.idTipoUsuario),
+        idSucursal: form.idSucursal ? Number(form.idSucursal) : null,
+        activo: form.estado === 'Activo',
+      })
+      if (actualizado) setForm(actualizado)
+      setEditando(false)
+    } catch (err) {
+      setError(err?.response?.data?.mensaje || err?.response?.data?.error || err.message || 'No se pudieron guardar los cambios.')
+    } finally {
+      setGuardando(false)
+    }
   }
 
   function cancelarEdicion() {
     setForm({ ...empleado })
+    setError('')
     setEditando(false)
   }
 
-  const asistenciaReciente = asistencia.filter((a) => a.empleado === empleado.nombre).slice(0, 5)
+  const rolSeleccionado = roles.find((rol) => Number(rol.idTipoUsuario) === Number(form.idTipoUsuario))
+  const permiteSinSucursal = rolSeleccionado?.nombre?.trim().toLowerCase() === 'administrador'
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <span className="h-10 w-10 rounded-lg bg-brand-yellow/15 text-brand-yellow flex items-center justify-center shrink-0">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-yellow/15 text-brand-yellow">
             <UserRound size={20} />
           </span>
           <div>
-            <button onClick={onVolver} className="flex items-center gap-1.5 text-xs text-brand-yellow hover:underline w-fit mb-1">
+            <button type="button" onClick={onVolver} className="mb-1 flex w-fit items-center gap-1.5 text-xs text-brand-yellow hover:underline">
               <ArrowLeft size={13} /> Volver a empleados
             </button>
-            <h1 className="text-xl font-bold text-white">{empleado.nombre}</h1>
-            <p className="text-sm text-gray-500">{empleado.cargo} · {empleado.sucursal}</p>
+            <h1 className="text-xl font-bold text-white">{form.nombre}</h1>
+            <p className="text-sm text-gray-500">{form.cargo} · {form.sucursal}</p>
           </div>
         </div>
         {!editando && (
           <button
+            type="button"
             onClick={() => setEditando(true)}
-            className="flex items-center gap-2 bg-brand-yellow text-panel-sidebar font-semibold text-sm rounded-lg px-4 py-2 hover:brightness-95 transition"
+            className="flex items-center gap-2 rounded-lg bg-brand-yellow px-4 py-2 text-sm font-semibold text-panel-sidebar transition hover:brightness-95"
           >
             <Pencil size={15} /> Editar
           </button>
         )}
       </div>
 
-      <form onSubmit={handleGuardar} className="grid lg:grid-cols-3 gap-4">
-        <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">
-          <p className="font-semibold text-white text-sm">Información personal</p>
-          <Campo label="Nombre completo" value={form.nombre} editando={editando} onChange={(v) => actualizar('nombre', v)} />
-          <Campo label="Cédula" value={form.cedula} editando={editando} onChange={(v) => actualizar('cedula', v)} />
-          <Campo label="Teléfono" value={form.telefono} editando={editando} onChange={(v) => actualizar('telefono', v)} />
-          <Campo label="Correo electrónico" value={form.correo} editando={editando} onChange={(v) => actualizar('correo', v)} type="email" />
+      {error && <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
+
+      <form onSubmit={handleGuardar} className="grid gap-4 lg:grid-cols-2">
+        <div className="flex flex-col gap-3 rounded-xl border border-panel-border bg-panel-card p-4">
+          <p className="text-sm font-semibold text-white">Información personal</p>
+          <Campo label="Primer nombre" value={form.primerNombre} editando={editando} onChange={(v) => actualizar('primerNombre', v)} required />
+          <Campo label="Segundo nombre" value={form.segundoNombre} editando={editando} onChange={(v) => actualizar('segundoNombre', v)} />
+          <Campo label="Primer apellido" value={form.primerApellido} editando={editando} onChange={(v) => actualizar('primerApellido', v)} required />
+          <Campo label="Segundo apellido" value={form.segundoApellido} editando={editando} onChange={(v) => actualizar('segundoApellido', v)} />
+          <Selector
+            label="Tipo de documento"
+            value={form.idTipoDocumento}
+            editando={editando}
+            onChange={(v) => actualizar('idTipoDocumento', v)}
+            opciones={tiposDocumento.map((documento) => ({ value: documento.idTipoDocumento, label: documento.nombre }))}
+          />
+          <Campo label="Número de documento" value={form.numeroDocumento} editando={editando} onChange={(v) => actualizar('numeroDocumento', v)} required maxLength={20} />
+          <Campo label="Teléfono" value={form.telefono} editando={editando} onChange={(v) => actualizar('telefono', v)} maxLength={20} />
+          <Campo label="Correo electrónico" value={form.correoElectronico} editando={editando} onChange={(v) => actualizar('correoElectronico', v)} type="email" required maxLength={150} />
         </div>
 
-        <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">
-          <p className="font-semibold text-white text-sm">Información laboral</p>
-          <Selector label="Cargo" value={form.cargo} editando={editando} onChange={(v) => actualizar('cargo', v)} opciones={CARGOS} />
-          <Selector label="Sucursal" value={form.sucursal} editando={editando} onChange={(v) => actualizar('sucursal', v)} opciones={['La Chinita', 'Buenavista']} />
-          <Selector label="Rol en el sistema" value={form.rolSistema} editando={editando} onChange={(v) => actualizar('rolSistema', v)} opciones={ROLES_SISTEMA} />
-          <Campo label="Fecha de ingreso" value={form.fechaIngreso} editando={false} onChange={() => {}} />
+        <div className="flex flex-col gap-3 rounded-xl border border-panel-border bg-panel-card p-4">
+          <p className="text-sm font-semibold text-white">Acceso laboral</p>
+          <Selector
+            label="Rol del sistema"
+            value={form.idTipoUsuario}
+            editando={editando}
+            onChange={(v) => actualizar('idTipoUsuario', v)}
+            opciones={roles.map((rol) => ({ value: rol.idTipoUsuario, label: rol.nombre }))}
+          />
+          <Selector
+            label="Sucursal"
+            value={form.idSucursal ?? ''}
+            editando={editando}
+            onChange={(v) => actualizar('idSucursal', v)}
+            opciones={sucursales.map((sucursal) => ({ value: sucursal.idSucursal, label: sucursal.nombreSucursal }))}
+            placeholder={permiteSinSucursal ? 'Sin sucursal asignada' : undefined}
+            required={!permiteSinSucursal}
+          />
+          <Campo label="Fecha de registro" value={form.fechaIngreso} editando={false} />
           <div className="flex flex-col gap-1 text-xs text-gray-400">
             Estado
             {editando ? (
-              <div className="flex gap-2">
-                {['Activo', 'Inactivo'].map((op) => (
-                  <button
-                    key={op}
-                    type="button"
-                    onClick={() => actualizar('estado', op)}
-                    className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                      form.estado === op ? 'bg-brand-yellow text-panel-sidebar' : 'bg-panel-bg border border-panel-border text-gray-300'
-                    }`}
-                  >
-                    {op}
-                  </button>
-                ))}
-              </div>
+              <select
+                value={form.estado}
+                onChange={(event) => actualizar('estado', event.target.value)}
+                className="rounded-lg border border-panel-border bg-panel-bg px-3 py-2 text-sm text-gray-200 outline-none"
+              >
+                <option>Activo</option>
+                <option>Inactivo</option>
+              </select>
             ) : (
-              <span className={`w-fit text-xs font-semibold px-2.5 py-1 rounded-full ${form.estado === 'Activo' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+              <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${form.estado === 'Activo' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
                 {form.estado}
               </span>
             )}
           </div>
-        </div>
-
-        <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">
-          <p className="font-semibold text-white text-sm">Asistencia reciente</p>
-          {asistenciaReciente.length === 0 && <p className="text-xs text-gray-500">Sin registros de asistencia.</p>}
-          {asistenciaReciente.map((a, i) => (
-            <div key={i} className="flex items-center justify-between text-xs">
-              <span className="text-gray-300">{a.fecha}</span>
-              <span className={`font-semibold px-2 py-0.5 rounded-full ${a.estado === 'Presente' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
-                {a.estado}
-              </span>
-            </div>
-          ))}
+          <p className="text-xs text-gray-500">La cuenta no guarda ni muestra la contraseña. Para cambiarla se necesita un flujo separado de restablecimiento.</p>
         </div>
 
         {editando && (
-          <div className="lg:col-span-3 flex items-center gap-3">
-            <button type="submit" className="flex items-center gap-2 bg-brand-yellow text-panel-sidebar font-semibold text-sm rounded-lg px-5 py-2.5 hover:brightness-95 transition">
-              <Save size={16} /> Guardar cambios
+          <div className="flex items-center gap-3 lg:col-span-2">
+            <button type="submit" disabled={guardando} className="flex items-center gap-2 rounded-lg bg-brand-yellow px-5 py-2.5 text-sm font-semibold text-panel-sidebar transition hover:brightness-95 disabled:opacity-50">
+              <Save size={16} /> {guardando ? 'Guardando…' : 'Guardar cambios'}
             </button>
-            <button type="button" onClick={cancelarEdicion} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white px-4 py-2.5">
+            <button type="button" onClick={cancelarEdicion} className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-400 hover:text-white">
               <X size={15} /> Cancelar
             </button>
           </div>
@@ -122,12 +156,12 @@ export default function DetalleEmpleado({ empleado, edicionInicial = false, onVo
   )
 }
 
-function Campo({ label, value, editando, onChange, type = 'text' }) {
+function Campo({ label, value, editando, onChange, type = 'text', ...inputProps }) {
   if (!editando) {
     return (
       <div>
         <p className="text-xs text-gray-500">{label}</p>
-        <p className="text-sm text-gray-200">{value || '-'}</p>
+        <p className="break-words text-sm text-gray-200">{value || '-'}</p>
       </div>
     )
   }
@@ -136,29 +170,37 @@ function Campo({ label, value, editando, onChange, type = 'text' }) {
       {label}
       <input
         type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="bg-panel-bg border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none"
+        value={value || ''}
+        onChange={(event) => onChange(event.target.value)}
+        {...inputProps}
+        className="rounded-lg border border-panel-border bg-panel-bg px-3 py-2 text-sm text-gray-200 outline-none"
       />
     </label>
   )
 }
 
-function Selector({ label, value, editando, onChange, opciones }) {
+function Selector({ label, value, editando, onChange, opciones, placeholder, required }) {
+  const texto = opciones.find((opcion) => String(opcion.value) === String(value))?.label
   if (!editando) {
     return (
       <div>
         <p className="text-xs text-gray-500">{label}</p>
-        <p className="text-sm text-gray-200">{value || '-'}</p>
+        <p className="text-sm text-gray-200">{texto || 'Sin asignar'}</p>
       </div>
     )
   }
   return (
     <label className="flex flex-col gap-1 text-xs text-gray-400">
       {label}
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="bg-panel-bg border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none">
-        {opciones.map((op) => (
-          <option key={op}>{op}</option>
+      <select
+        value={value ?? ''}
+        onChange={(event) => onChange(event.target.value)}
+        required={required}
+        className="rounded-lg border border-panel-border bg-panel-bg px-3 py-2 text-sm text-gray-200 outline-none"
+      >
+        {placeholder && <option value="">{placeholder}</option>}
+        {opciones.map((opcion) => (
+          <option key={opcion.value} value={opcion.value}>{opcion.label}</option>
         ))}
       </select>
     </label>

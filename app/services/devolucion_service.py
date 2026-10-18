@@ -10,6 +10,8 @@ from app.models.detalle_venta import DetalleVenta
 from app.models.devoluciones import Devolucion
 from app.models.factura import Factura
 from app.models.inventario import Inventario
+from app.models.tipo_movimiento import TipoMovimiento
+from app.models.transaccion_inventario import TransaccionInventario
 from app.models.tipo_devolucion import TipoDevolucion
 from app.models.venta import Venta
 
@@ -129,6 +131,14 @@ class DevolucionService:
                     productoApto=det["productoApto"],
                 ))
 
+            tipo_entrada = None
+            if cantidades_reingreso:
+                tipo_entrada = db.session.scalar(
+                    select(TipoMovimiento).where(TipoMovimiento.nombre == "Entrada")
+                )
+                if tipo_entrada is None:
+                    raise ValueError("No está configurado el tipo de movimiento 'Entrada'.")
+
             for id_producto, cantidad in cantidades_reingreso.items():
                 inventario = inventarios_por_producto.get(id_producto)
                 if inventario is None:
@@ -138,7 +148,18 @@ class DevolucionService:
                         CantidadDisponible=Decimal("0"),
                     )
                     db.session.add(inventario)
+                    db.session.flush()
+                stock_anterior = Decimal(str(inventario.CantidadDisponible))
                 inventario.CantidadDisponible += cantidad
+                db.session.add(TransaccionInventario(
+                    idInventario=inventario.idInventario,
+                    idTipoMovimiento=tipo_entrada.idTipoMovimiento,
+                    idDevolucion=nueva_devolucion.idDevolucion,
+                    cantidad=cantidad,
+                    stockAnterior=stock_anterior,
+                    stockNuevo=Decimal(str(inventario.CantidadDisponible)),
+                    fecha=nueva_devolucion.fecha,
+                ))
 
             db.session.commit()
             return nueva_devolucion

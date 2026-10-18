@@ -278,6 +278,7 @@ export const menuItems = [
       { label: 'Buenavista', page: 'facturas-buena-vista' },
     ],
   },
+  { label: 'Órdenes a proveedores', icon: 'Truck', page: 'pedidos-proveedor' },
   {
     label: 'Finanzas',
     icon: 'DollarSign',
@@ -295,9 +296,12 @@ export const menuItems = [
     page: 'reportes',
     children: [
       { label: 'Ventas', page: 'reporte-ventas' },
+      { label: 'Facturas', page: 'reporte-facturas' },
+      { label: 'Devoluciones', page: 'reporte-devoluciones' },
+      { label: 'Ventas por producto', page: 'reporte-productos' },
       { label: 'Inventario', page: 'reporte-inventario' },
       { label: 'Financiero', page: 'reporte-financiero' },
-      { label: 'Por sucursal', page: 'reporte-sucursal' },
+      { label: 'Compras a proveedores', page: 'reporte-compras' },
       { label: 'Empleados', page: 'reporte-empleados' },
       { label: 'Consolidado', page: 'reporte-consolidado' },
     ],

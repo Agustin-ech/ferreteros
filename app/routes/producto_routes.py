@@ -80,6 +80,17 @@ def listar_productos():
     return jsonify(productos_schema.dump(productos)), 200
 
 
+@producto_bp.get("/catalogos")
+@roles_required("admin", "bodega", "vendedor")
+def listar_catalogos_producto():
+    tipos = TipoProducto.query.filter_by(activo=True).order_by(TipoProducto.nombre).all()
+    unidades = UnidadMedida.query.filter_by(activo=True).order_by(UnidadMedida.nombre).all()
+    return jsonify({
+        "tiposProducto": [tipo.to_dict() for tipo in tipos],
+        "unidadesMedida": [unidad.to_dict() for unidad in unidades],
+    }), 200
+
+
 @producto_bp.get("/<int:producto_id>")
 @roles_required("admin", "bodega", "vendedor")
 def obtener_producto(producto_id):

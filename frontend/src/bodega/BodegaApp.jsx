@@ -9,17 +9,19 @@ import AjusteInventario from "./pages/AjusteInventario.jsx";
 import RegistrarDanado from "./pages/RegistrarDanado.jsx";
 import ConsultarDanados from "./pages/ConsultarDanados.jsx";
 import MercanciaRecibida from "./pages/MercanciaRecibida.jsx";
+import Kardex from "./pages/Kardex.jsx";
 
 // Panel de Bodega. Navega por estado (igual que el panel admin), sin
 // react-router, así no hay que instalar nada nuevo.
-// TEMPORAL-BACKEND: BodegaProvider (store.jsx) guarda todo en el navegador;
-// se cambia por llamadas al backend cuando esté listo.
+// Los productos y el inventario se consultan en el backend; los registros de
+// mercancía dañada y recibida siguen siendo datos locales de la maqueta.
 const paginas = {
   inicio: Inicio,
   recibida: MercanciaRecibida,
   "registrar-producto": RegistrarProducto,
   "consultar-productos": ConsultarProductos,
   inventario: Inventario,
+  kardex: Kardex,
   ajuste: AjusteInventario,
   "registrar-danado": RegistrarDanado,
   "consultar-danados": ConsultarDanados,

@@ -61,12 +61,17 @@ def crear_app(config_extra: dict | None = None, uri: str = "sqlite://") -> Flask
     # explícitamente para que el módulo los encuentre (misma mecanismo: fijar_modelos).
     from app.models.cliente import Cliente
     from app.models.devoluciones import Devolucion
+    from app.models.detalle_devolucion import DetalleDevolucion
+    from app.models.detalle_orden_proveedor import DetalleOrdenProveedor
     from app.models.detalle_venta import DetalleVenta
+    from app.models.estado_pedido_proveedor import EstadoPedidoProveedor
     from app.models.factura import Factura
     from app.models.funcion import Funcion
     from app.models.inventario import Inventario
     from app.models.metodo_pago import MetodoPago
     from app.models.producto import Producto
+    from app.models.pedido_proveedor import PedidoProveedor
+    from app.models.proveedor import Proveedor
     from app.models.sucursal import Sucursal
     from app.models.sucursal_usuario import SucursalUsuario
     from app.models.tipo_devolucion import TipoDevolucion
@@ -86,6 +91,7 @@ def crear_app(config_extra: dict | None = None, uri: str = "sqlite://") -> Flask
         "DetalleVenta": DetalleVenta,
         "Factura": Factura,
         "Devolucion": Devolucion,
+        "DetalleDevolucion": DetalleDevolucion,
         "TipoVenta": TipoVenta,
         "MetodoPago": MetodoPago,
         "TipoDeDocumento": TipoDeDocumento,
@@ -99,6 +105,10 @@ def crear_app(config_extra: dict | None = None, uri: str = "sqlite://") -> Flask
         "Funcion": Funcion,
         "SucursalUsuario": SucursalUsuario,
         "TipoUsuarioFuncion": TipoUsuarioFuncion,
+        "DetalleOrdenProveedor": DetalleOrdenProveedor,
+        "EstadoPedidoProveedor": EstadoPedidoProveedor,
+        "PedidoProveedor": PedidoProveedor,
+        "Proveedor": Proveedor,
     })
 
     app.test_client_class = ClienteReportes
@@ -120,7 +130,9 @@ def crear_app_con_datos(uri: str = "sqlite://", config_extra: dict | None = None
             "TipoDeDocumento", "TipoUsuario", "TipoProducto", "UnidadMedida",
             "TipoVenta", "metodo_pago", "tipo_devolucion", "sucursales",
             "usuarios", "Cliente", "Producto", "Venta", "detalle_venta",
-            "Factura", "devolucion", "Inventario",
+            "Factura", "devolucion", "DetalleDevolucion", "Inventario",
+            "Proveedor", "estado_pedido_proveedor", "pedido_proveedor",
+            "detalle_orden_proveedor",
         )
         db.metadata.create_all(
             bind=db.engine,

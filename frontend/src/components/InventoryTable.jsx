@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { ChevronsUpDown } from 'lucide-react'
-import { productosInventario } from '../data/mockData'
 
 const formatoCOP = new Intl.NumberFormat('es-CO', {
   style: 'currency',
@@ -28,8 +27,7 @@ export default function InventoryTable({ onSelectProduct, filas: filasProp, sucu
   const [orden, setOrden] = useState({ campo: null, dir: 'asc' })
 
   const sucursalOptions = useMemo(() => {
-    const nombres = (sucursalesProp.length ? sucursalesProp : [{ nombreSucursal: 'La Chinita' }, { nombreSucursal: 'Buena Vista' }])
-      .map((s) => s.nombreSucursal || s.nombre || s)
+    const nombres = sucursalesProp.map((s) => s.nombreSucursal || s.nombre || s)
     return ['Todas las Sucursales', ...nombres]
   }, [sucursalesProp])
 
@@ -39,13 +37,7 @@ export default function InventoryTable({ onSelectProduct, filas: filasProp, sucu
   )
 
   const filasBase = useMemo(() => {
-    const source = filasProp && filasProp.length ? filasProp : productosInventario.map((p) => ({
-      ...p,
-      total: Number(p.laChinita || 0) + Number(p.buenaVista || 0),
-      estado: getEstado(Number(p.laChinita || 0) + Number(p.buenaVista || 0)),
-      laChinita: Number(p.laChinita || 0),
-      buenaVista: Number(p.buenaVista || 0),
-    }))
+    const source = filasProp || []
 
     return source.map((p) => ({
       ...p,
@@ -117,25 +109,6 @@ export default function InventoryTable({ onSelectProduct, filas: filasProp, sucu
             <option key={c}>{c}</option>
           ))}
         </select>
-        <select
-          value={sucursal}
-          onChange={(e) => setSucursal(e.target.value)}
-          className="bg-panel-card border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none"
-        >
-          {sucursalOptions.map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </select>
-        <select
-          value={estadoFiltro}
-          onChange={(e) => setEstadoFiltro(e.target.value)}
-          className="bg-panel-card border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none"
-        >
-          <option>Estado de Stock</option>
-          <option>Stock Alto</option>
-          <option>Stock Bajo</option>
-          <option>Agotado</option>
-        </select>
       </div>
 
       <div className="bg-panel-card border border-panel-border rounded-xl overflow-x-auto scroll-thin">
@@ -157,7 +130,7 @@ export default function InventoryTable({ onSelectProduct, filas: filasProp, sucu
                 </button>
               </th>
               <th className="py-3 pr-2 font-medium">Precio</th>
-              <th className="py-3 pr-4 font-medium">Estado</th>
+
             </tr>
           </thead>
           <tbody>
@@ -167,7 +140,10 @@ export default function InventoryTable({ onSelectProduct, filas: filasProp, sucu
                 onClick={() => onSelectProduct(p)}
                 className="border-b border-panel-border/60 last:border-0 hover:bg-white/5 cursor-pointer"
               >
-                <td className="py-3 pl-6 pr-2 text-gray-200 font-medium">{p.nombre}</td>
+                <td className="py-3 pl-6 pr-2 text-gray-200 font-medium">
+                  <span className="block">{p.nombre}</span>
+                  <span className="block text-xs font-normal text-gray-500">{p.codigo}</span>
+                </td>
                 <td className="py-3 pr-2 text-gray-400">{p.categoria}</td>
                 {sucursalOptions.slice(1).map((nombreSucursal) => {
                   const sucursalId = sucursalLookup[nombreSucursal]
@@ -176,11 +152,7 @@ export default function InventoryTable({ onSelectProduct, filas: filasProp, sucu
                 })}
                 <td className="py-3 pr-2 text-gray-200 font-semibold">{p.total}</td>
                 <td className="py-3 pr-2 text-gray-300">{formatoCOP.format(p.precio)}</td>
-                <td className="py-3 pr-4">
-                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${estadoStyles[p.estado]}`}>
-                    {p.estado}
-                  </span>
-                </td>
+
               </tr>
             ))}
             {filas.length === 0 && (

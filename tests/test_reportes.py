@@ -32,6 +32,7 @@ REPORTES = [
     "ventas-por-producto",
     "inventario-existencias",
     "consolidado-sucursales",
+    "compras",
 ]
 
 
@@ -58,6 +59,7 @@ def test_catalogo_lista_los_reportes_y_los_pendientes(cliente):
     assert all(r["endpoint"].startswith("/api/v1/reportes/") for r in datos["reportes"])
     pendientes = {p["codigo"] for p in datos["reportes_pendientes"]}
     assert {"ingresos-egresos", "estado-resultados", "inventario-movimientos"} <= pendientes
+    assert "compras" not in pendientes
 
 
 def test_sucursales_devuelve_las_activas(sucursales):
@@ -82,6 +84,71 @@ def test_todos_los_reportes_responden_en_json(cliente, codigo, sucursal_id):
     for seccion in datos["secciones"]:
         for fila in seccion["filas"]:
             assert len(fila) == len(seccion["columnas"])
+
+
+def test_reporte_compras_resume_pedidos_proveedores_estados_y_productos(cliente):
+    response = cliente.get(
+        "/api/v1/reportes/compras",
+        query_string=PERIODO,
+    )
+
+    assert response.status_code == 200, response.get_json()
+    reporte = response.get_json()
+    kpis = {item["etiqueta"]: item["valor"] for item in reporte["kpis"]}
+    assert kpis["Órdenes registradas"] == 3
+    assert kpis["Proveedores con órdenes"] == 2
+    assert kpis["Órdenes pendientes o parciales"] == 1
+    assert kpis["Valor de órdenes no canceladas"] == 1900.0
+    assert kpis["Valor de órdenes canceladas"] == 100.0
+
+    secciones = {item["nombre"]: item for item in reporte["secciones"]}
+    detalle = secciones["Detalle de órdenes (3 de 3)"]
+    assert len(detalle["filas"]) == 3
+    estados = secciones["Resumen por estado"]
+    assert {fila[0] for fila in estados["filas"]} == {"Pendiente", "Recibido", "Cancelado"}
+    productos = secciones["Productos solicitados (órdenes no canceladas)"]
+    assert sum(fila[4] for fila in productos["filas"]) == 1900.0
+
+
+def test_reporte_compras_filtra_por_proveedor_y_sucursal(cliente):
+    response = cliente.get(
+        "/api/v1/reportes/compras",
+        query_string={**PERIODO, "sucursal_id": "1", "idProveedor": "1"},
+    )
+
+    assert response.status_code == 200, response.get_json()
+    reporte = response.get_json()
+    kpis = {item["etiqueta"]: item["valor"] for item in reporte["kpis"]}
+    assert kpis["Órdenes registradas"] == 1
+    assert kpis["Proveedores con órdenes"] == 1
+    assert kpis["Valor de órdenes no canceladas"] == 1200.0
+    assert reporte["filtros_aplicados"]["idProveedor"] == 1
+    assert "sucursal" not in [
+        columna["clave"]
+        for columna in reporte["secciones"][-1]["columnas"]
+    ]
+
+
+def test_reporte_compras_exporta_csv_pdf_y_valida_filtro_proveedor(cliente):
+    csv = cliente.get(
+        "/api/v1/reportes/compras",
+        query_string={**PERIODO, "formato": "csv", "idProveedor": "1"},
+    )
+    pdf = cliente.get(
+        "/api/v1/reportes/compras",
+        query_string={**PERIODO, "formato": "pdf"},
+    )
+    invalido = cliente.get(
+        "/api/v1/reportes/compras",
+        query_string={**PERIODO, "idProveedor": "proveedor"},
+    )
+
+    assert csv.status_code == 200
+    assert csv.data.startswith(b"\xef\xbb\xbf")
+    assert b"Resumen por proveedor" in csv.data
+    assert pdf.status_code == 200
+    assert pdf.data.startswith(b"%PDF")
+    assert invalido.status_code == 422
 
 
 # --------------------------------------------------------------------------- LA prueba clave

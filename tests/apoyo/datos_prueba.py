@@ -8,11 +8,15 @@ from decimal import Decimal
 from app.extensions import db
 from app.models.cliente import Cliente
 from app.models.devoluciones import Devolucion
+from app.models.detalle_orden_proveedor import DetalleOrdenProveedor
 from app.models.detalle_venta import DetalleVenta
+from app.models.estado_pedido_proveedor import EstadoPedidoProveedor
 from app.models.factura import Factura
 from app.models.inventario import Inventario
 from app.models.metodo_pago import MetodoPago
+from app.models.pedido_proveedor import PedidoProveedor
 from app.models.producto import Producto
+from app.models.proveedor import Proveedor
 from app.models.sucursal import Sucursal
 from app.models.tipo_devolucion import TipoDevolucion
 from app.models.tipo_documento import TipoDeDocumento
@@ -179,5 +183,95 @@ def sembrar() -> None:
         for producto_id in range(1, 4)
     ]
 
-    db.session.add_all(ventas + detalles + facturas + devoluciones + inventarios)
+    proveedores = [
+        Proveedor(
+            idProveedor=1,
+            nombreEmpresa="Materiales de prueba",
+            nit="TEST-PROV-001",
+            activo=True,
+        ),
+        Proveedor(
+            idProveedor=2,
+            nombreEmpresa="Herramientas de prueba",
+            nit="TEST-PROV-002",
+            activo=True,
+        ),
+    ]
+    estados_pedido = [
+        EstadoPedidoProveedor(idEstadoPedidoProveedor=1, nombre="Pendiente", activo=True),
+        EstadoPedidoProveedor(idEstadoPedidoProveedor=2, nombre="Recibido", activo=True),
+        EstadoPedidoProveedor(idEstadoPedidoProveedor=3, nombre="Cancelado", activo=True),
+    ]
+    pedidos = [
+        PedidoProveedor(
+            idPedidoProveedor=1,
+            idProveedor=1,
+            idSucursal=1,
+            idUsuario=1,
+            idEstadoPedidoProveedor=1,
+            fechaPedido=datetime(2026, 1, 10, 12, tzinfo=timezone.utc),
+            total=Decimal("1200.00"),
+        ),
+        PedidoProveedor(
+            idPedidoProveedor=2,
+            idProveedor=2,
+            idSucursal=2,
+            idUsuario=1,
+            idEstadoPedidoProveedor=2,
+            fechaPedido=datetime(2026, 2, 10, 12, tzinfo=timezone.utc),
+            total=Decimal("700.00"),
+        ),
+        PedidoProveedor(
+            idPedidoProveedor=3,
+            idProveedor=1,
+            idSucursal=2,
+            idUsuario=1,
+            idEstadoPedidoProveedor=3,
+            fechaPedido=datetime(2026, 3, 10, 12, tzinfo=timezone.utc),
+            total=Decimal("100.00"),
+        ),
+    ]
+    detalles_pedido = [
+        DetalleOrdenProveedor(
+            idDetalleOrdenProveedor=1,
+            idPedidoProveedor=1,
+            idProducto=1,
+            cantidadPedida=Decimal("2.00"),
+            cantidadRecibida=Decimal("0.00"),
+            precioUnitario=Decimal("500.00"),
+            subtotal=Decimal("1000.00"),
+        ),
+        DetalleOrdenProveedor(
+            idDetalleOrdenProveedor=2,
+            idPedidoProveedor=1,
+            idProducto=2,
+            cantidadPedida=Decimal("1.00"),
+            cantidadRecibida=Decimal("0.00"),
+            precioUnitario=Decimal("200.00"),
+            subtotal=Decimal("200.00"),
+        ),
+        DetalleOrdenProveedor(
+            idDetalleOrdenProveedor=3,
+            idPedidoProveedor=2,
+            idProducto=1,
+            cantidadPedida=Decimal("1.00"),
+            cantidadRecibida=Decimal("1.00"),
+            precioUnitario=Decimal("700.00"),
+            subtotal=Decimal("700.00"),
+        ),
+        DetalleOrdenProveedor(
+            idDetalleOrdenProveedor=4,
+            idPedidoProveedor=3,
+            idProducto=3,
+            cantidadPedida=Decimal("1.00"),
+            cantidadRecibida=Decimal("0.00"),
+            precioUnitario=Decimal("100.00"),
+            subtotal=Decimal("100.00"),
+        ),
+    ]
+
+    db.session.add_all(
+        ventas + detalles + facturas + devoluciones + inventarios
+        + proveedores + estados_pedido + pedidos + detalles_pedido
+    )
     db.session.commit()

@@ -1,7 +1,6 @@
 import { AlertTriangle } from 'lucide-react'
-import { alertasStock as alertasStockEjemplo } from '../data/mockData'
 
-export default function StockAlerts({ alertasStock = alertasStockEjemplo }) {
+export default function StockAlerts({ alertasStock = [] }) {
   return (
     <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
@@ -21,13 +20,20 @@ export default function StockAlerts({ alertasStock = alertasStockEjemplo }) {
           </tr>
         </thead>
         <tbody>
-          {alertasStock.map((a) => (
-            <tr key={a.producto} className="border-b border-panel-border/60 last:border-0">
+          {alertasStock.map((a, index) => (
+            <tr key={`${a.producto}-${a.sucursal}-${index}`} className="border-b border-panel-border/60 last:border-0">
               <td className="py-2 text-gray-300">{a.producto}</td>
               <td className="py-2 text-gray-400">{a.sucursal}</td>
               <td className="py-2 text-right font-semibold text-red-400">{a.existencia}</td>
             </tr>
           ))}
+          {alertasStock.length === 0 && (
+            <tr>
+              <td colSpan={3} className="py-5 text-center text-gray-500">
+                Sin alertas de stock registradas.
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
