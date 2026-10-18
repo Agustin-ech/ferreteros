@@ -104,5 +104,5 @@ export default function App() {
   if (sesion?.rol === 'admin') return <AdminApp onLogout={cerrarSesion} />
   if (sesion?.rol === 'bodega') return <BodegaApp onLogout={cerrarSesion} />
   if (sesion?.rol === 'vendedor') return <VendedorApp usuario={sesion.usuario} onLogout={cerrarSesion} />
-  return <Login onLogin={iniciarSesion} mensajeSesion={mensajeSesion} />
+  return <Login onLogin={iniciarSesion} mensajeSesion={mensajeSesion}/>
 }

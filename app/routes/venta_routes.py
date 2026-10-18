@@ -18,7 +18,7 @@ from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from marshmallow import ValidationError
 
 from app.schemas.venta_schema import (
-    factura_output_schema,
+    factura_detalle_output_schema,
     venta_input_schema,
     venta_output_schema,
     ventas_output_schema,
@@ -97,6 +97,12 @@ def registrar_venta():
 @requiere_rol("admin", "vendedor")
 def listar_ventas():
     try:
+        usuario = _usuario_actual()
+        if usuario["rol"] != "admin" and usuario["sucursal_id"] is None:
+            return jsonify({
+                "mensaje": "El usuario vendedor no tiene una sucursal activa asignada. Contacta a un administrador."
+            }), 403
+
         pagina = _parametro_entero("pagina", 1)
         por_pagina = _parametro_entero("por_pagina", 20)
         if por_pagina > 100:
@@ -107,12 +113,22 @@ def listar_ventas():
             "idCliente": _parametro_entero("cliente"),
             "desde": _parametro_fecha("desde"),
             "hasta": _parametro_fecha("hasta"),
+            "factura": request.args.get("factura", type=str),
+            "metodoPago": request.args.get("metodoPago", type=str),
         }
+        if filtros["factura"] is not None:
+            filtros["factura"] = filtros["factura"].strip()
+            if not filtros["factura"] or len(filtros["factura"]) > 50:
+                raise ValueError("El parámetro 'factura' debe contener entre 1 y 50 caracteres.")
+        if filtros["metodoPago"] is not None:
+            filtros["metodoPago"] = filtros["metodoPago"].strip()
+            if not filtros["metodoPago"] or len(filtros["metodoPago"]) > 50:
+                raise ValueError("El parámetro 'metodoPago' debe contener entre 1 y 50 caracteres.")
         if filtros["desde"] and filtros["hasta"] and filtros["desde"] >= filtros["hasta"]:
             raise ValueError("'desde' debe ser anterior a 'hasta'.")
 
         ventas, total = VentaService.listar_ventas(
-            _usuario_actual(), filtros, pagina, por_pagina
+            usuario, filtros, pagina, por_pagina
         )
         return jsonify({
             "data": ventas_output_schema.dump(ventas),
@@ -144,4 +160,4 @@ def obtener_factura(id_venta):
     factura = VentaService.obtener_factura(id_venta, _usuario_actual())
     if not factura:
         return jsonify({"mensaje": "Factura no encontrada."}), 404
-    return jsonify(factura_output_schema.dump(factura)), 200
+    return jsonify(factura_detalle_output_schema.dump(factura)), 200
