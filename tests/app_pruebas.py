@@ -1,8 +1,7 @@
 """
-App Flask mínima para ejecutar el módulo de reportes **sin el proyecto completo**.
+App Flask mínima para ejecutar reportes y mercancía dañada sin una base externa.
 
-Registra tus modelos (los copiados en `tests/apoyo/`), el blueprint de reportes y los
-manejadores de error, sobre una base SQLite descartable.
+Registra los blueprints y modelos necesarios sobre una base SQLite descartable.
 
 En tu proyecto esto no se usa: allá el blueprint se registra en el app factory real
 (`app/__init__.py`) y la configuración vive en `app/config.py`.
@@ -12,12 +11,14 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from decimal import Decimal
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from flask import Flask
 from flask_jwt_extended import JWTManager, create_access_token
 from flask.testing import FlaskClient
+from sqlalchemy import text
 
 from app.errors.reportes import registrar_handlers
 from app.extensions import db
@@ -60,24 +61,37 @@ def crear_app(config_extra: dict | None = None, uri: str = "sqlite://") -> Flask
     # En tu proyecto estos modelos se importan desde app/models/. Aquí se registran
     # explícitamente para que el módulo los encuentre (misma mecanismo: fijar_modelos).
     from app.models.cliente import Cliente
+    from app.models.alerta_inventario import AlertaInventario
+    from app.models.detalle_devolucion import DetalleDevolucion
     from app.models.devoluciones import Devolucion
     from app.models.detalle_venta import DetalleVenta
+    from app.models.domicilio import Domicilio
+    from app.models.entrega import Entrega
+    from app.models.estado_pedido_proveedor import EstadoPedidoProveedor
     from app.models.factura import Factura
     from app.models.funcion import Funcion
     from app.models.inventario import Inventario
     from app.models.metodo_pago import MetodoPago
+    from app.models.ajuste_inventario import AjusteInventario
+    from app.models.mercancia_danada import MercanciaDanada, TipoDanio
+    from app.models.mercancia_recibida import MercanciaRecibida
+    from app.models.pedido_proveedor import PedidoProveedor
     from app.models.producto import Producto
+    from app.models.reclamos_proveedor import ReclamoProveedor
     from app.models.sucursal import Sucursal
     from app.models.sucursal_usuario import SucursalUsuario
     from app.models.tipo_devolucion import TipoDevolucion
     from app.models.tipo_documento import TipoDeDocumento
-    from app.models.tipo_producto import TipoProducto
     from app.models.tipo_usuario import TipoUsuario
     from app.models.tipo_venta import TipoVenta
+    from app.models.tipo_movimiento import TipoMovimiento
+    from app.models.tipo_producto import TipoProducto
+    from app.models.transaccion_inventario import TransaccionInventario
     from app.models.unidad_medida import UnidadMedida
     from app.models.usuario import Usuario
     from app.models.usuario_tipo_funcion import TipoUsuarioFuncion
     from app.models.venta import Venta
+    from app.models.proveedor import Proveedor
 
     fijar_modelos({
         "Sucursal": Sucursal,
@@ -104,9 +118,23 @@ def crear_app(config_extra: dict | None = None, uri: str = "sqlite://") -> Flask
     app.test_client_class = ClienteReportes
 
     from app.routes.reporte_routes import reportes_bp
+    from app.routes.mercancia_danada_routes import mercancia_danada_bp
+    from app.routes.mercancia_recibida_routes import mercancia_recibida_bp
+    from app.routes.cliente_routes import cliente_bp
+    from app.routes.sucursal_routes import sucursal_bp
+    from app.routes.auth_routes import auth_bp
+    from app.routes.usuario_routes import usuario_bp
+    from app.errors.negocio import registrar_handlers_negocio
 
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(usuario_bp)
     app.register_blueprint(reportes_bp)
+    app.register_blueprint(mercancia_danada_bp)
+    app.register_blueprint(mercancia_recibida_bp)
+    app.register_blueprint(cliente_bp)
+    app.register_blueprint(sucursal_bp)
     registrar_handlers(app)
+    registrar_handlers_negocio(app)
     return app
 
 
@@ -119,8 +147,9 @@ def crear_app_con_datos(uri: str = "sqlite://", config_extra: dict | None = None
         tablas_reportes = (
             "TipoDeDocumento", "TipoUsuario", "TipoProducto", "UnidadMedida",
             "TipoVenta", "metodo_pago", "tipo_devolucion", "sucursales",
-            "usuarios", "Cliente", "Producto", "Venta", "detalle_venta",
-            "Factura", "devolucion", "Inventario",
+            "usuarios", "SucursalUsuario", "Funcion", "tipo_usuario_funcion",
+            "Cliente", "Producto", "Venta", "detalle_venta", "Factura",
+            "devolucion", "Inventario",
         )
         db.metadata.create_all(
             bind=db.engine,
@@ -135,3 +164,67 @@ def crear_app_con_datos(uri: str = "sqlite://", config_extra: dict | None = None
             additional_claims={"rol": "admin", "idSucursal": None},
         )
     return app
+
+
+def preparar_mercancia_danada(app: Flask, *, con_datos: bool = False) -> None:
+    """Añade el esquema SQLite del módulo de daños a las apps de prueba."""
+    from app.models.ajuste_inventario import AjusteInventario
+    from app.models.inventario import Inventario
+    from app.models.mercancia_danada import MercanciaDanada, TipoDanio
+    from app.models.mercancia_recibida import MercanciaRecibida
+    from app.models.producto import Producto
+    from app.models.tipo_movimiento import TipoMovimiento
+
+    with app.app_context():
+        db.metadata.create_all(
+            bind=db.engine,
+            tables=[
+                TipoMovimiento.__table__,
+                AjusteInventario.__table__,
+                TipoDanio.__table__,
+                MercanciaDanada.__table__,
+                MercanciaRecibida.__table__,
+            ],
+        )
+        db.session.execute(text('''
+            CREATE TABLE "TransaccionInventario" (
+                "idTransaccionInventario" INTEGER PRIMARY KEY,
+                "idInventario" INTEGER NOT NULL,
+                "idTipoMovimiento" INTEGER NOT NULL,
+                "idVenta" INTEGER,
+                "idDevolucion" INTEGER,
+                "idPedidoProveedor" INTEGER,
+                "idAjusteInventario" INTEGER,
+                "cantidad" NUMERIC(12, 3) NOT NULL,
+                "fecha" DATETIME NOT NULL
+            )
+        '''))
+        if con_datos:
+            db.session.add_all([
+                TipoMovimiento(idTipoMovimiento=1, nombre="Entrada"),
+                TipoMovimiento(idTipoMovimiento=2, nombre="Salida"),
+                TipoMovimiento(idTipoMovimiento=3, nombre="Ajuste"),
+                TipoDanio(idTipoDanio=1, nombre="Defecto de fábrica", imputableProveedor=True),
+                TipoDanio(idTipoDanio=2, nombre="Producto roto"),
+                TipoDanio(idTipoDanio=3, nombre="Caja dañada"),
+                TipoDanio(idTipoDanio=4, nombre="Faltantes"),
+                TipoDanio(idTipoDanio=5, nombre="Vencido"),
+            ])
+            for id_producto in range(5, 10):
+                db.session.add(Producto(
+                    idProducto=id_producto,
+                    idTipoProducto=1,
+                    idUnidadMedida=1,
+                    codigoSKU=f"PRT-{id_producto:03d}",
+                    nombre=f"Producto de prueba {id_producto}",
+                    precio=Decimal("1000"),
+                    costoUnitario=Decimal("500"),
+                ))
+                for id_sucursal in ([1, 2] if id_producto == 7 else [1]):
+                    db.session.add(Inventario(
+                        idInventario=id_producto * 10 + id_sucursal,
+                        idProducto=id_producto,
+                        idSucursal=id_sucursal,
+                        CantidadDisponible=Decimal("20"),
+                    ))
+        db.session.commit()

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeft, Package, Boxes, History, ChevronRight, Save } from 'lucide-react'
 import api from '../api/client'
+import { errorMessage } from '../api/client'
 
 const formatoCOP = new Intl.NumberFormat('es-CO', {
   style: 'currency',
@@ -41,6 +42,7 @@ export default function ProductDetailPanel({ producto, sucursales = [], onAjuste
   const [historialAbierto, setHistorialAbierto] = useState(false)
   const [historial, setHistorial] = useState([])
   const [cargandoHistorial, setCargandoHistorial] = useState(false)
+  const [errorHistorial, setErrorHistorial] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState('')
   const [esError, setEsError] = useState(false)
@@ -55,27 +57,28 @@ export default function ProductDetailPanel({ producto, sucursales = [], onAjuste
     setNuevaCantidad(stockActual)
   }, [producto.id, idSucursal, stockActual])
 
-  useEffect(() => {
-    let cancelado = false
+  const cargarHistorial = useCallback(async () => {
     if (!producto.id || !idSucursal) {
       setHistorial([])
-      return () => { cancelado = true }
+      return
     }
 
     setCargandoHistorial(true)
-    api.get('/api/inventario/ajustes', { params: { producto: producto.id, sucursal: idSucursal } })
-      .then((response) => {
-        if (!cancelado) setHistorial(response.data || [])
+    setErrorHistorial('')
+    try {
+      const response = await api.get('/api/inventario/ajustes', {
+        params: { producto: producto.id, sucursal: idSucursal },
       })
-      .catch(() => {
-        if (!cancelado) setHistorial([])
-      })
-      .finally(() => {
-        if (!cancelado) setCargandoHistorial(false)
-      })
-
-    return () => { cancelado = true }
+      setHistorial(response.data || [])
+    } catch (error) {
+      setErrorHistorial(errorMessage(error, 'No se pudo cargar el historial.'))
+      setHistorial([])
+    } finally {
+      setCargandoHistorial(false)
+    }
   }, [producto.id, idSucursal])
+
+  useEffect(() => { cargarHistorial() }, [cargarHistorial])
 
   async function handleGuardar(e) {
     e.preventDefault()
@@ -111,13 +114,10 @@ export default function ProductDetailPanel({ producto, sucursales = [], onAjuste
       onAjusteGuardado?.(response.data.inventario_actualizado)
       setEsError(false)
       setMensaje('Ajuste guardado y registrado en el historial.')
-      const historialResponse = await api.get('/api/inventario/ajustes', {
-        params: { producto: producto.id, sucursal: idSucursal },
-      })
-      setHistorial(historialResponse.data || [])
+      await cargarHistorial()
     } catch (error) {
       setEsError(true)
-      setMensaje(error?.response?.data?.mensaje || error?.response?.data?.error || 'No se pudo guardar el ajuste.')
+      setMensaje(errorMessage(error, 'No se pudo guardar el ajuste.'))
     } finally {
       setGuardando(false)
     }
@@ -259,7 +259,13 @@ export default function ProductDetailPanel({ producto, sucursales = [], onAjuste
         {historialAbierto && (
           <div className="border-t border-panel-border px-3 py-2 flex flex-col gap-2">
             {cargandoHistorial && <p className="text-xs text-gray-500">Cargando historial...</p>}
-            {!cargandoHistorial && historial.length === 0 && (
+            {errorHistorial && (
+              <div role="alert" className="flex flex-wrap items-center gap-2 text-xs text-red-400">
+                <span>{errorHistorial}</span>
+                <button type="button" className="underline" onClick={cargarHistorial}>Reintentar</button>
+              </div>
+            )}
+            {!cargandoHistorial && !errorHistorial && historial.length === 0 && (
               <p className="text-xs text-gray-500">No hay ajustes registrados para esta sucursal.</p>
             )}
             {historial.map((ajuste) => {

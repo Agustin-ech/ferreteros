@@ -1,33 +1,48 @@
 import { useState } from 'react'
 import { ArrowLeft, UserRound, Pencil, Save, X } from 'lucide-react'
-import { modulosSistema, asistencia } from '../data/mockData'
-
-const CARGOS = ['Vendedor', 'Cajero', 'Bodega', 'Administrador']
-const ROLES_SISTEMA = ['Administrador', 'Cajero', 'Vendedor', 'Bodeguero']
+import { errorMessage } from '../api/client'
 
 // Vista de un empleado: por defecto solo lectura, con un botón "Editar"
 // que activa el formulario en el sitio (no navega a otra pantalla). Al
 // entrar desde el lápiz de la lista, `edicionInicial` llega en true.
-export default function DetalleEmpleado({ empleado, edicionInicial = false, onVolver, onGuardar }) {
+const ETIQUETAS_ROL = { admin: 'Administrador', vendedor: 'Vendedor', bodega: 'Bodeguero' }
+
+export default function DetalleEmpleado({
+  empleado,
+  edicionInicial = false,
+  sucursales = [],
+  roles = [],
+  onVolver,
+  onGuardar,
+}) {
   const [editando, setEditando] = useState(edicionInicial)
   const [form, setForm] = useState({ ...empleado })
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
 
   function actualizar(campo, valor) {
     setForm((prev) => ({ ...prev, [campo]: valor }))
   }
 
-  function handleGuardar(e) {
+  async function handleGuardar(e) {
     e.preventDefault()
-    onGuardar(form)
-    setEditando(false)
+    setError('')
+    setGuardando(true)
+    try {
+      const actualizado = await onGuardar(form)
+      if (actualizado) setForm({ ...actualizado })
+      setEditando(false)
+    } catch (saveError) {
+      setError(errorMessage(saveError, 'No se pudo guardar el empleado.'))
+    } finally {
+      setGuardando(false)
+    }
   }
 
   function cancelarEdicion() {
     setForm({ ...empleado })
     setEditando(false)
   }
-
-  const asistenciaReciente = asistencia.filter((a) => a.empleado === empleado.nombre).slice(0, 5)
 
   return (
     <div className="flex flex-col gap-6">
@@ -40,8 +55,8 @@ export default function DetalleEmpleado({ empleado, edicionInicial = false, onVo
             <button onClick={onVolver} className="flex items-center gap-1.5 text-xs text-brand-yellow hover:underline w-fit mb-1">
               <ArrowLeft size={13} /> Volver a empleados
             </button>
-            <h1 className="text-xl font-bold text-white">{empleado.nombre}</h1>
-            <p className="text-sm text-gray-500">{empleado.cargo} · {empleado.sucursal}</p>
+            <h1 className="text-xl font-bold text-white">{form.nombre}</h1>
+            <p className="text-sm text-gray-500">{form.rolSistema} · {form.sucursal}</p>
           </div>
         </div>
         {!editando && (
@@ -57,7 +72,10 @@ export default function DetalleEmpleado({ empleado, edicionInicial = false, onVo
       <form onSubmit={handleGuardar} className="grid lg:grid-cols-3 gap-4">
         <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">
           <p className="font-semibold text-white text-sm">Información personal</p>
-          <Campo label="Nombre completo" value={form.nombre} editando={editando} onChange={(v) => actualizar('nombre', v)} />
+          <Campo label="Primer nombre" value={form.primerNombre} editando={editando} onChange={(v) => actualizar('primerNombre', v)} />
+          <Campo label="Segundo nombre" value={form.segundoNombre} editando={editando} onChange={(v) => actualizar('segundoNombre', v)} />
+          <Campo label="Primer apellido" value={form.primerApellido} editando={editando} onChange={(v) => actualizar('primerApellido', v)} />
+          <Campo label="Segundo apellido" value={form.segundoApellido} editando={editando} onChange={(v) => actualizar('segundoApellido', v)} />
           <Campo label="Cédula" value={form.cedula} editando={editando} onChange={(v) => actualizar('cedula', v)} />
           <Campo label="Teléfono" value={form.telefono} editando={editando} onChange={(v) => actualizar('telefono', v)} />
           <Campo label="Correo electrónico" value={form.correo} editando={editando} onChange={(v) => actualizar('correo', v)} type="email" />
@@ -65,10 +83,8 @@ export default function DetalleEmpleado({ empleado, edicionInicial = false, onVo
 
         <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">
           <p className="font-semibold text-white text-sm">Información laboral</p>
-          <Selector label="Cargo" value={form.cargo} editando={editando} onChange={(v) => actualizar('cargo', v)} opciones={CARGOS} />
-          <Selector label="Sucursal" value={form.sucursal} editando={editando} onChange={(v) => actualizar('sucursal', v)} opciones={['La Chinita', 'Buenavista']} />
-          <Selector label="Rol en el sistema" value={form.rolSistema} editando={editando} onChange={(v) => actualizar('rolSistema', v)} opciones={ROLES_SISTEMA} />
-          <Campo label="Fecha de ingreso" value={form.fechaIngreso} editando={false} onChange={() => {}} />
+          <Selector label="Sucursal" value={form.sucursal} editando={editando} onChange={(v) => actualizar('sucursal', v)} opciones={sucursales.map((item) => item.nombreSucursal)} />
+          <Selector label="Rol en el sistema" value={form.rolSistema} editando={editando} onChange={(v) => actualizar('rolSistema', v)} opciones={roles.map((item) => ETIQUETAS_ROL[item.rol] || item.nombre)} />
           <div className="flex flex-col gap-1 text-xs text-gray-400">
             Estado
             {editando ? (
@@ -95,24 +111,22 @@ export default function DetalleEmpleado({ empleado, edicionInicial = false, onVo
         </div>
 
         <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">
-          <p className="font-semibold text-white text-sm">Asistencia reciente</p>
-          {asistenciaReciente.length === 0 && <p className="text-xs text-gray-500">Sin registros de asistencia.</p>}
-          {asistenciaReciente.map((a, i) => (
-            <div key={i} className="flex items-center justify-between text-xs">
-              <span className="text-gray-300">{a.fecha}</span>
-              <span className={`font-semibold px-2 py-0.5 rounded-full ${a.estado === 'Presente' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
-                {a.estado}
-              </span>
-            </div>
+          <p className="font-semibold text-white text-sm">Funciones del rol</p>
+          {(empleado.permisos || []).length === 0 && <p className="text-xs text-gray-500">Este rol no tiene funciones asignadas.</p>}
+          {(empleado.permisos || []).map((permiso) => (
+            <span key={permiso} className="w-fit rounded-full bg-brand-yellow/15 px-2.5 py-1 text-xs font-semibold text-brand-yellow">
+              {permiso}
+            </span>
           ))}
         </div>
 
+        {error && <p role="alert" className="lg:col-span-3 text-sm text-red-400">{error}</p>}
         {editando && (
           <div className="lg:col-span-3 flex items-center gap-3">
-            <button type="submit" className="flex items-center gap-2 bg-brand-yellow text-panel-sidebar font-semibold text-sm rounded-lg px-5 py-2.5 hover:brightness-95 transition">
-              <Save size={16} /> Guardar cambios
+            <button type="submit" disabled={guardando} className="flex items-center gap-2 bg-brand-yellow text-panel-sidebar font-semibold text-sm rounded-lg px-5 py-2.5 hover:brightness-95 transition disabled:opacity-50">
+              <Save size={16} /> {guardando ? 'Guardando...' : 'Guardar cambios'}
             </button>
-            <button type="button" onClick={cancelarEdicion} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white px-4 py-2.5">
+            <button type="button" disabled={guardando} onClick={cancelarEdicion} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white px-4 py-2.5 disabled:opacity-50">
               <X size={15} /> Cancelar
             </button>
           </div>
@@ -136,7 +150,7 @@ function Campo({ label, value, editando, onChange, type = 'text' }) {
       {label}
       <input
         type={type}
-        value={value}
+        value={value || ''}
         onChange={(e) => onChange(e.target.value)}
         className="bg-panel-bg border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none"
       />

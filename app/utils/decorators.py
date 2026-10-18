@@ -1,12 +1,15 @@
 from functools import wraps
 from flask import jsonify
 from flask_jwt_extended import get_jwt
+from app.utils.roles import normalizar_rol
 
 def requiere_rol(*roles_permitidos):
     """
     Decorador para restringir el acceso basado en el rol guardado en los claims del JWT.
     Debe usarse siempre DESPUÉS de @jwt_required().
     """
+    roles_permitidos = {normalizar_rol(rol) for rol in roles_permitidos}
+
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
@@ -14,7 +17,7 @@ def requiere_rol(*roles_permitidos):
             claims = get_jwt()
             
             # Extraemos el rol. Recordar que tu login lo guarda como "admin"
-            rol_usuario = claims.get("rol")
+            rol_usuario = normalizar_rol(claims.get("rol"))
 
             if not rol_usuario or rol_usuario not in roles_permitidos:
                 return jsonify({

@@ -109,6 +109,7 @@ class MercanciaDanada(db.Model):
 
     descripcion = db.Column(db.String(255), nullable=True)
     estado = db.Column(db.String(20), nullable=False, default=ESTADO_REGISTRADA)
+    descontadoDeInventario = db.Column(db.Boolean, nullable=False, default=True)
 
     fecha = db.Column(db.DateTime(timezone=True), default=_ahora_utc, nullable=False)
     fecha_creacion = db.Column(db.DateTime(timezone=True), default=_ahora_utc, nullable=False)
@@ -152,6 +153,7 @@ class MercanciaDanada(db.Model):
             "valorPerdida": float(self.valorPerdida or 0),
             "descripcion": self.descripcion,
             "estado": self.estado,
+            "descontadoDeInventario": self.descontadoDeInventario,
             "fecha": self.fecha.isoformat() if self.fecha else None,
         }
 

@@ -19,19 +19,22 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from flask_jwt_extended import create_access_token
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.extensions import db
 from app.services.inventario_service import existencias
-from tests.app_pruebas import crear_app_con_datos
+from tests.app_pruebas import crear_app_con_datos, preparar_mercancia_danada
 
 PERIODO = {"desde": "2026-01-01", "hasta": "2026-12-31"}
 
 
 @pytest.fixture(scope="module")
 def app():
-    return crear_app_con_datos()
+    application = crear_app_con_datos()
+    preparar_mercancia_danada(application, con_datos=True)
+    return application
 
 
 @pytest.fixture(scope="module")
@@ -53,6 +56,30 @@ def _registrar(cliente, **cambios):
     cuerpo = {"idProducto": 5, "idSucursal": 1, "idUsuario": 2, "idTipoDanio": 1, "cantidad": 4}
     cuerpo.update(cambios)
     return cliente.post("/api/v1/mercancia-danada", json=cuerpo)
+
+
+# --------------------------------------------------------------------------- Seguridad
+def test_catalogo_de_danios_exige_jwt(cliente):
+    r = cliente.get(
+        "/api/v1/mercancia-danada/tipos-danio",
+        headers={"Authorization": ""},
+    )
+    assert r.status_code == 401
+
+
+def test_solo_admin_puede_crear_tipos_de_danio(app, cliente):
+    with app.app_context():
+        token = create_access_token(
+            identity="1",
+            additional_claims={"rol": "bodega", "idSucursal": 1},
+        )
+
+    r = cliente.post(
+        "/api/v1/mercancia-danada/tipos-danio",
+        json={"nombre": "Tipo no autorizado"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 403
 
 
 # --------------------------------------------------------------------------- Catálogo
@@ -79,7 +106,9 @@ def test_registrar_descuenta_el_inventario(app, cliente):
 
     cuerpo = r.get_json()
     assert cuerpo["estado"] == "Registrada"
+    assert cuerpo["idUsuario"] == 1  # el usuario se toma del JWT, no del cuerpo enviado
     assert cuerpo["descontadoDeInventario"] is True
+    assert cuerpo["idAjusteInventario"] is not None
     assert Decimal(str(cuerpo["existenciasRestantes"])) == antes - 4
     assert _existencias(app, 5, 1) == antes - 4
 
@@ -127,6 +156,7 @@ def test_anular_devuelve_el_inventario_una_sola_vez(app, cliente):
 
     r = cliente.delete(f"/api/v1/mercancia-danada/{registro['idMercanciaDanada']}")
     assert r.status_code == 200
+    assert r.get_json()["registro"]["idAjusteReversion"] is not None
     assert _existencias(app, 7, 2) == antes
 
     # Anulada es estado final: no se puede volver a anular ni devolver dos veces
@@ -196,6 +226,24 @@ def test_listado_pagina_los_resultados(cliente):
     ids1 = {d["idMercanciaDanada"] for d in pagina1["datos"]}
     ids2 = {d["idMercanciaDanada"] for d in pagina2["datos"]}
     assert not (ids1 & ids2)
+
+
+def test_busqueda_del_listado_cubre_codigo_y_tipo_de_danio(cliente):
+    registro = _registrar(cliente, cantidad=1).get_json()
+    por_codigo = cliente.get(
+        "/api/v1/mercancia-danada",
+        query_string={**PERIODO, "buscar": "PRT-005"},
+    ).get_json()
+    por_motivo = cliente.get(
+        "/api/v1/mercancia-danada",
+        query_string={**PERIODO, "buscar": "Defecto de fábrica"},
+    ).get_json()
+    assert registro["idMercanciaDanada"] in {
+        item["idMercanciaDanada"] for item in por_codigo["datos"]
+    }
+    assert registro["idMercanciaDanada"] in {
+        item["idMercanciaDanada"] for item in por_motivo["datos"]
+    }
 
 
 def test_resumen_cuadra_con_sus_desgloses(cliente):

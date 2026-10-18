@@ -19,6 +19,7 @@ from app.extensions import db
 from app.models import Sucursal
 from app.schemas.sucursal_schema import SucursalSchema
 from app.utils.auth import roles_required
+from app.utils.roles import sucursal_autorizada
 
 sucursal_bp = Blueprint("sucursales", __name__, url_prefix="/api/sucursales")
 
@@ -36,7 +37,11 @@ def _datos_invalidos(error):
 
 
 def _puede_ver(sucursal_id):
-    return g.usuario["rol"] == "admin" or g.usuario["sucursal_id"] == sucursal_id
+    return sucursal_autorizada(
+        g.usuario["rol"],
+        g.usuario["sucursal_id"],
+        sucursal_id,
+    )
 
 
 # --------------------------------------------------------------------------- #
