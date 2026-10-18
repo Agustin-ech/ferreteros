@@ -4,6 +4,7 @@ from flask import g, jsonify
 from flask_jwt_extended import get_jwt, get_jwt_identity, verify_jwt_in_request
 
 from app.models.usuario import Usuario
+from app.utils.roles import normalizar_rol
 
 
 def roles_required(*roles):
@@ -35,7 +36,7 @@ def roles_required(*roles):
             if not getattr(usuario, "activo", True):
                 return jsonify({"error": "Usuario inactivo."}), 403
 
-            rol_usuario = claims.get("rol")
+            rol_usuario = normalizar_rol(claims.get("rol"))
             sucursal_id = claims.get("idSucursal")
 
             if roles and rol_usuario not in roles:

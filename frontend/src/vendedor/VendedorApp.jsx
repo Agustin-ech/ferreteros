@@ -29,7 +29,7 @@ const navigation = [
   ] },
 ]
 
-export default function VendedorApp({ onLogout }) {
+export default function VendedorApp({ onLogout, usuario }) {
   const [visitaActual, setVisitaActual] = useState('inicio')
 
   const renderizarVisita = () => {
@@ -49,7 +49,7 @@ export default function VendedorApp({ onLogout }) {
   return (
     <RoleLayout
       roleName="Vendedor"
-      localName="La Chinita"
+      localName={usuario?.sucursal || 'Sin sucursal asignada'}
       navigation={navigation}
       activePage={visitaActual}
       onNavigate={setVisitaActual}

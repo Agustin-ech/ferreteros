@@ -1,4 +1,5 @@
 from marshmallow import Schema, fields, validate, validates, ValidationError
+from app.utils.roles import normalizar_rol
 
 class LoginSchema(Schema):
 
@@ -50,9 +51,20 @@ class LoginSchema(Schema):
 
 class UsuarioSchema(Schema):
     idUsuario = fields.Int(dump_only=True)
+    idTipoDocumento = fields.Int(dump_only=True)
+    numeroDocumento = fields.Str(dump_only=True)
+    primerNombre = fields.Str(dump_only=True)
+    segundoNombre = fields.Str(dump_only=True, allow_none=True)
+    primerApellido = fields.Str(dump_only=True)
+    segundoApellido = fields.Str(dump_only=True, allow_none=True)
     nombre = fields.Method("nombre_completo", dump_only=True)
+    correoElectronico = fields.Str(dump_only=True)
+    telefono = fields.Str(dump_only=True, allow_none=True)
+    idTipoUsuario = fields.Int(dump_only=True)
     rol = fields.Method("rol_nombre", dump_only=True)
     idSucursal = fields.Method("sucursal_id", dump_only=True)
+    sucursal = fields.Method("sucursal_nombre", dump_only=True)
+    permisos = fields.Method("permisos_rol", dump_only=True)
     activo = fields.Bool(dump_only=True)
 
     def nombre_completo(self, usuario):
@@ -68,16 +80,35 @@ class UsuarioSchema(Schema):
         )
 
     def rol_nombre(self, usuario):
-        rol = usuario.tipo_usuario.nombre.strip().lower()
-        return "admin" if rol == "administrador" else rol
+        return normalizar_rol(usuario.tipo_usuario.nombre)
 
     def sucursal_id(self, usuario):
-        asignaciones = sorted(
-            (asignacion for asignacion in usuario.sucursales if asignacion.activo),
-            key=lambda asignacion: asignacion.idSucursal,
-        )
+        asignaciones = self._sucursales_activas(usuario)
         return asignaciones[0].idSucursal if asignaciones else None
 
+    def sucursal_nombre(self, usuario):
+        asignaciones = self._sucursales_activas(usuario)
+        return asignaciones[0].sucursal.nombreSucursal if asignaciones else None
+
+    def permisos_rol(self, usuario):
+        return sorted(
+            (
+                asignacion.funcion.nombre
+                for asignacion in usuario.tipo_usuario.funciones
+                if asignacion.funcion and asignacion.funcion.activo
+            ),
+            key=str.casefold,
+        )
+
+    def _sucursales_activas(self, usuario):
+        return sorted(
+            (
+                asignacion
+                for asignacion in usuario.sucursales
+                if asignacion.activo and asignacion.sucursal and asignacion.sucursal.activa
+            ),
+            key=lambda asignacion: asignacion.idSucursal,
+        )
 
 # Instancias listas para usar en las rutas, evitando crear un Schema()
 # nuevo cada vez que se necesita validar o serializar.

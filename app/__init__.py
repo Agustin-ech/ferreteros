@@ -45,11 +45,13 @@ def create_app(config_class=Config):
     from app.models.transaccion_inventario import TransaccionInventario
     from app.models.mercancia_danada import MercanciaDanada
     from app.models.mercancia_danada import TipoDanio
+    from app.models.mercancia_recibida import MercanciaRecibida
     # Registro de blueprints (descomentar a medida que los crees)
     # from app.routes.auth_routes import auth_bp
     # app.register_blueprint(auth_bp, url_prefix='/api/auth')
 
     from app.routes.auth_routes import auth_bp
+    from app.routes.cliente_routes import cliente_bp
     from app.routes.inventario_routes import inventario_bp
     from app.routes.producto_routes import producto_bp
     from app.routes.sucursal_routes import sucursal_bp
@@ -58,8 +60,12 @@ def create_app(config_class=Config):
     from app.errors.reportes import registrar_handlers
     from app.routes.devolucion_routes import devolucion_bp
     from app.routes.domicilio_routes import domicilio_bp
+    from app.routes.mercancia_danada_routes import mercancia_danada_bp
+    from app.routes.mercancia_recibida_routes import mercancia_recibida_bp
+    from app.errors.negocio import registrar_handlers_negocio
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(cliente_bp)
     app.register_blueprint(usuario_bp)
     app.register_blueprint(inventario_bp)
     app.register_blueprint(producto_bp)
@@ -68,6 +74,9 @@ def create_app(config_class=Config):
     app.register_blueprint(reportes_bp)
     app.register_blueprint(devolucion_bp)
     app.register_blueprint(domicilio_bp)
+    app.register_blueprint(mercancia_danada_bp)
+    app.register_blueprint(mercancia_recibida_bp)
     registrar_handlers(app)
+    registrar_handlers_negocio(app)
 
     return app

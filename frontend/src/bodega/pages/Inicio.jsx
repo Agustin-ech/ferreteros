@@ -3,7 +3,7 @@ import { Stat, Badge } from "../components/ui.jsx";
 import { Package, Truck, TriangleAlert, Warehouse } from "lucide-react";
 
 export default function Inicio({ onNavigate }) {
-  const { productos, danados, recibidos } = useBodega();
+  const { productos, danadosTotal, recibidos, recibidosCargando, recibidosError, cargarRecibidos } = useBodega();
   const existencias = productos.reduce((s, p) => s + p.stock, 0);
   const recibidas = recibidos.reduce((s, r) => s + r.cantidad, 0);
   const bajos = [...productos].filter((p) => p.stock <= 15).sort((a, b) => a.stock - b.stock).slice(0, 5);
@@ -18,7 +18,7 @@ export default function Inicio({ onNavigate }) {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat icono={Package} titulo="Productos en inventario" valor={productos.length} />
         <Stat icono={Truck} titulo="Mercancía recibida" valor={recibidas} />
-        <Stat icono={TriangleAlert} titulo="Productos dañados" valor={danados.length} />
+        <Stat icono={TriangleAlert} titulo="Productos dañados" valor={danadosTotal} />
         <Stat icono={Warehouse} titulo="Existencias totales" valor={existencias.toLocaleString("es-CO")} nota="Total en bodega" />
       </div>
 
@@ -26,9 +26,14 @@ export default function Inicio({ onNavigate }) {
         <div className="card lg:col-span-2">
           <div className="mb-2 flex justify-between"><h2 className="font-semibold">Últimos ingresos de mercancía</h2>
             <button onClick={() => onNavigate("recibida")} className="text-xs text-[#F2B01E]">Ver todo</button></div>
+          {recibidosError && <div role="alert" className="mb-2 flex justify-between gap-2 text-sm text-red-400"><span>{recibidosError}</span><button type="button" className="underline" onClick={cargarRecibidos}>Reintentar</button></div>}
           <table className="w-full">
             <thead><tr>{["Fecha", "Factura", "Cantidad", "Proveedor", "Estado"].map((h) => <th key={h} className="th">{h}</th>)}</tr></thead>
-            <tbody>{recibidos.slice(0, 5).map((r) => (
+            <tbody>{recibidosCargando && recibidos.length === 0
+              ? <tr><td className="td text-center text-gray-400" colSpan="5">Cargando ingresos...</td></tr>
+              : recibidos.length === 0
+                ? <tr><td className="td text-center text-gray-400" colSpan="5">No hay ingresos registrados.</td></tr>
+                : recibidos.slice(0, 5).map((r) => (
               <tr key={r.id}><td className="td">{r.fecha}</td><td className="td">{r.factura}</td><td className="td">{r.cantidad}</td>
                 <td className="td">{r.proveedor}</td><td className="td"><Badge texto={r.estado} /></td></tr>
             ))}</tbody>

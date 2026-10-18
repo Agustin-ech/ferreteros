@@ -4,7 +4,13 @@ import DetalleRol from './DetalleRol'
 
 const ROL_VACIO = { rol: '', descripcion: '', permisos: [], usuarios: 0 }
 
-export default function RolesPermisos({ roles = [], onAgregarRol, onEditarRol }) {
+export default function RolesPermisos({
+  roles = [],
+  funciones = [],
+  rolesDisponibles = [],
+  onAgregarRol,
+  onEditarRol,
+}) {
   const [seleccionado, setSeleccionado] = useState(null)
   const [edicionInicial, setEdicionInicial] = useState(false)
   const [creando, setCreando] = useState(false)
@@ -13,10 +19,12 @@ export default function RolesPermisos({ roles = [], onAgregarRol, onEditarRol })
     return (
       <DetalleRol
         rol={ROL_VACIO}
+        funciones={funciones}
+        rolesDisponibles={rolesDisponibles}
         esCreacion
         onVolver={() => setCreando(false)}
-        onGuardar={(rol) => {
-          onAgregarRol?.(rol)
+        onGuardar={async (rol) => {
+          await onAgregarRol?.(rol)
           setCreando(false)
         }}
       />
@@ -27,10 +35,11 @@ export default function RolesPermisos({ roles = [], onAgregarRol, onEditarRol })
     return (
       <DetalleRol
         rol={seleccionado}
+        funciones={funciones}
         edicionInicial={edicionInicial}
         onVolver={() => setSeleccionado(null)}
-        onGuardar={(rol) => {
-          onEditarRol?.(seleccionado.rol, rol)
+        onGuardar={async (rol) => {
+          await onEditarRol?.(seleccionado.idTipoUsuario, rol)
           setSeleccionado(null)
         }}
       />
@@ -52,9 +61,10 @@ export default function RolesPermisos({ roles = [], onAgregarRol, onEditarRol })
         <button
           type="button"
           onClick={() => setCreando(true)}
+          disabled={rolesDisponibles.length === 0}
           className="flex items-center gap-2 bg-brand-yellow text-panel-sidebar font-semibold text-sm rounded-lg px-4 py-2 hover:brightness-95 transition whitespace-nowrap"
         >
-          <Plus size={16} /> Nuevo rol
+          <Plus size={16} /> {rolesDisponibles.length ? 'Nuevo rol' : 'Roles compatibles configurados'}
         </button>
       </div>
 
@@ -71,7 +81,7 @@ export default function RolesPermisos({ roles = [], onAgregarRol, onEditarRol })
           </thead>
           <tbody>
             {roles.map((r) => (
-              <tr key={r.rol} className="border-b border-panel-border/60 last:border-0 hover:bg-white/5">
+            <tr key={r.idTipoUsuario} className="border-b border-panel-border/60 last:border-0 hover:bg-white/5">
                 <td className="py-3 pl-4 pr-2 text-gray-200 font-medium whitespace-nowrap">{r.rol}</td>
                 <td className="py-3 pr-2 text-gray-400">{r.descripcion}</td>
                 <td className="py-3 pr-2">
@@ -93,6 +103,9 @@ export default function RolesPermisos({ roles = [], onAgregarRol, onEditarRol })
                 </td>
               </tr>
             ))}
+            {roles.length === 0 && (
+              <tr><td colSpan={5} className="py-8 text-center text-gray-500">No hay roles compatibles configurados.</td></tr>
+            )}
           </tbody>
         </table>
       </div>

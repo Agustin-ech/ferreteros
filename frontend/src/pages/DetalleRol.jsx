@@ -1,12 +1,22 @@
 import { useState } from 'react'
 import { ArrowLeft, ShieldCheck, Pencil, Save, X } from 'lucide-react'
-import { modulosSistema } from '../data/mockData'
+import { errorMessage } from '../api/client'
 
 // Vista de un rol: sirve para ver, editar (edicionInicial=true) o crear
 // uno nuevo (esCreacion=true, arranca directo en modo edición).
-export default function DetalleRol({ rol, edicionInicial = false, esCreacion = false, onVolver, onGuardar }) {
+export default function DetalleRol({
+  rol,
+  funciones = [],
+  rolesDisponibles = [],
+  edicionInicial = false,
+  esCreacion = false,
+  onVolver,
+  onGuardar,
+}) {
   const [editando, setEditando] = useState(edicionInicial || esCreacion)
   const [form, setForm] = useState({ ...rol })
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
 
   function togglePermiso(modulo) {
     setForm((prev) => ({
@@ -15,10 +25,24 @@ export default function DetalleRol({ rol, edicionInicial = false, esCreacion = f
     }))
   }
 
-  function handleGuardar(e) {
+  async function handleGuardar(e) {
     e.preventDefault()
-    if (!form.rol.trim()) return
-    onGuardar(form)
+    if (esCreacion && !form.rol) return
+    setError('')
+    setGuardando(true)
+    try {
+      await onGuardar({
+        nombre: esCreacion ? form.rol : rol.nombre,
+        descripcion: form.descripcion,
+        idFunciones: funciones
+          .filter((funcion) => form.permisos.includes(funcion.nombre))
+          .map((funcion) => funcion.idFuncion),
+      })
+    } catch (saveError) {
+      setError(errorMessage(saveError, 'No se pudo guardar el rol.'))
+    } finally {
+      setGuardando(false)
+    }
   }
 
   return (
@@ -50,12 +74,27 @@ export default function DetalleRol({ rol, edicionInicial = false, esCreacion = f
             <>
               <label className="flex flex-col gap-1 text-xs text-gray-400">
                 Nombre del rol
-                <input
-                  value={form.rol}
-                  onChange={(e) => setForm((p) => ({ ...p, rol: e.target.value }))}
-                  disabled={!esCreacion}
-                  className="bg-panel-bg border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none disabled:opacity-60"
-                />
+                {esCreacion ? (
+                  <select
+                    value={form.rol}
+                    onChange={(e) => setForm((p) => ({ ...p, rol: e.target.value }))}
+                    required
+                    className="bg-panel-bg border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none"
+                  >
+                    <option value="">Selecciona un rol compatible</option>
+                    {rolesDisponibles.map((opcion) => (
+                      <option key={opcion.rol} value={opcion.rol}>
+                        {{ admin: 'Administrador', vendedor: 'Vendedor', bodega: 'Bodeguero' }[opcion.rol] || opcion.nombre}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={rol.rol}
+                    disabled
+                    className="bg-panel-bg border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none disabled:opacity-60"
+                  />
+                )}
               </label>
               <label className="flex flex-col gap-1 text-xs text-gray-400">
                 Descripción
@@ -76,15 +115,15 @@ export default function DetalleRol({ rol, edicionInicial = false, esCreacion = f
 
         <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">
           <p className="font-semibold text-white text-sm">Permisos por módulo</p>
-          {modulosSistema.map((modulo) => {
-            const activo = form.permisos.includes(modulo)
+          {funciones.map((funcion) => {
+            const activo = form.permisos.includes(funcion.nombre)
             return (
-              <label key={modulo} className="flex items-center justify-between text-sm text-gray-300">
-                {modulo}
+              <label key={funcion.idFuncion} className="flex items-center justify-between text-sm text-gray-300">
+                {funcion.nombre}
                 {editando ? (
                   <button
                     type="button"
-                    onClick={() => togglePermiso(modulo)}
+                    onClick={() => togglePermiso(funcion.nombre)}
                     className={`h-5 w-9 rounded-full transition relative shrink-0 ${activo ? 'bg-brand-yellow' : 'bg-panel-border'}`}
                   >
                     <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${activo ? 'left-4' : 'left-0.5'}`} />
@@ -99,10 +138,11 @@ export default function DetalleRol({ rol, edicionInicial = false, esCreacion = f
           })}
         </div>
 
+        {error && <p role="alert" className="lg:col-span-2 text-sm text-red-400">{error}</p>}
         {editando && (
           <div className="lg:col-span-2 flex items-center gap-3">
-            <button type="submit" className="flex items-center gap-2 bg-brand-yellow text-panel-sidebar font-semibold text-sm rounded-lg px-5 py-2.5 hover:brightness-95 transition">
-              <Save size={16} /> Guardar
+            <button type="submit" disabled={guardando} className="flex items-center gap-2 bg-brand-yellow text-panel-sidebar font-semibold text-sm rounded-lg px-5 py-2.5 hover:brightness-95 transition disabled:opacity-50">
+              <Save size={16} /> {guardando ? 'Guardando...' : 'Guardar'}
             </button>
             <button type="button" onClick={onVolver} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white px-4 py-2.5">
               <X size={15} /> Cancelar
