@@ -14,6 +14,7 @@ from app.schemas.domicilio_schema import (
 )
 from app.services.domicilio_service import DomicilioService
 from app.utils.decorators import requiere_rol
+from app.utils.roles import normalizar_rol
 
 domicilio_bp = Blueprint("domicilio_bp", __name__, url_prefix="/api/domicilios")
 
@@ -22,7 +23,7 @@ def _usuario_actual():
     claims = get_jwt()
     return {
         "id": int(get_jwt_identity()),
-        "rol": claims.get("rol"),
+        "rol": normalizar_rol(claims.get("rol")),
         "sucursal_id": claims.get("idSucursal"),
     }
 

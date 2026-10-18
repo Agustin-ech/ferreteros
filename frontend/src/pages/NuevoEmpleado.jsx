@@ -1,48 +1,56 @@
 import { useState } from 'react'
 import { UserPlus, Save } from 'lucide-react'
-import { modulosSistema } from '../data/mockData'
+import { errorMessage } from '../api/client'
 
-const CARGOS = ['Vendedor', 'Cajero', 'Bodega', 'Administrador']
-const ROLES_SISTEMA = ['Administrador', 'Cajero', 'Vendedor', 'Bodeguero']
+const ETIQUETAS_ROL = { admin: 'Administrador', vendedor: 'Vendedor', bodega: 'Bodeguero' }
+const FORMULARIO_VACIO = {
+  idTipoDocumento: '',
+  numeroDocumento: '',
+  primerNombre: '',
+  segundoNombre: '',
+  primerApellido: '',
+  segundoApellido: '',
+  correoElectronico: '',
+  telefono: '',
+  idSucursal: '',
+  idTipoUsuario: '',
+  password: '',
+}
 
-export default function NuevoEmpleado({ onNavigate, onAgregarEmpleado, empleados = [] }) {
-  const [form, setForm] = useState({
-    nombre: '', cedula: '', telefono: '', correo: '', fechaNacimiento: '',
-    cargo: '', sucursal: '', rolSistema: '', fechaIngreso: '', estado: 'Activo',
-  })
-  const [accesos, setAccesos] = useState(Object.fromEntries(modulosSistema.map((m) => [m, true])))
+export default function NuevoEmpleado({
+  onNavigate,
+  onAgregarEmpleado,
+  catalogosPersonal = {},
+  roles = [],
+  cargandoPersonal = false,
+}) {
+  const [form, setForm] = useState(FORMULARIO_VACIO)
+  const [error, setError] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const rolSeleccionado = roles.find((rol) => rol.idTipoUsuario === Number(form.idTipoUsuario))
 
   function actualizar(campo, valor) {
     setForm((prev) => ({ ...prev, [campo]: valor }))
+    setError('')
   }
 
-  function toggleAcceso(modulo) {
-    setAccesos((prev) => ({ ...prev, [modulo]: !prev[modulo] }))
-  }
-
-  function handleSubmit(e) {
-    e.preventDefault()
-    if (!form.nombre.trim() || !form.cedula.trim() || !form.cargo || !form.sucursal || !form.rolSistema) return
-
-    const siguienteId = String(
-      Math.max(0, ...empleados.map((emp) => Number(emp.id) || 0)) + 1
-    ).padStart(3, '0')
-
-    onAgregarEmpleado?.({
-      id: siguienteId,
-      nombre: form.nombre.trim(),
-      cedula: form.cedula.trim(),
-      cargo: form.cargo,
-      sucursal: form.sucursal,
-      telefono: form.telefono.trim(),
-      correo: form.correo.trim(),
-      fechaIngreso: form.fechaIngreso || '-',
-      rolSistema: form.rolSistema,
-      estado: form.estado,
-      salarioBase: 0,
-      ventas: 0,
-      facturas: 0,
-    })
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setError('')
+    setGuardando(true)
+    try {
+      await onAgregarEmpleado?.({
+        ...form,
+        idTipoDocumento: Number(form.idTipoDocumento),
+        idTipoUsuario: Number(form.idTipoUsuario),
+        idSucursal: Number(form.idSucursal),
+      })
+      setForm(FORMULARIO_VACIO)
+    } catch (submitError) {
+      setError(errorMessage(submitError, 'No se pudo registrar el empleado.'))
+    } finally {
+      setGuardando(false)
+    }
   }
 
   return (
@@ -53,64 +61,81 @@ export default function NuevoEmpleado({ onNavigate, onAgregarEmpleado, empleados
         </span>
         <div>
           <h1 className="text-xl font-bold text-white">Nuevo empleado</h1>
-          <p className="text-sm text-gray-500">Registra un nuevo integrante del equipo.</p>
+          <p className="text-sm text-gray-500">Registra una cuenta de usuario y asígnale sucursal y rol.</p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="grid lg:grid-cols-3 gap-4">
+      <form onSubmit={handleSubmit} className="grid lg:grid-cols-2 gap-4">
         <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">
           <p className="font-semibold text-white text-sm">Información personal</p>
-          <Campo label="Nombre completo *" placeholder="Ej: María López" value={form.nombre} onChange={(v) => actualizar('nombre', v)} required />
-          <Campo label="Cédula *" placeholder="Ej: 1234567890" value={form.cedula} onChange={(v) => actualizar('cedula', v)} required />
-          <Campo label="Teléfono *" placeholder="Ej: 3001234567" value={form.telefono} onChange={(v) => actualizar('telefono', v)} />
-          <Campo label="Correo electrónico" placeholder="Ej: correo@ejemplo.com" value={form.correo} onChange={(v) => actualizar('correo', v)} type="email" />
-          <Campo label="Fecha de nacimiento" value={form.fechaNacimiento} onChange={(v) => actualizar('fechaNacimiento', v)} type="date" />
+          <Selector
+            label="Tipo de documento *"
+            value={form.idTipoDocumento}
+            onChange={(value) => actualizar('idTipoDocumento', value)}
+            opciones={(catalogosPersonal.tiposDocumento || []).map((tipo) => ({
+              value: tipo.idTipoDocumento,
+              label: `${tipo.acronimo} · ${tipo.nombre}`,
+            }))}
+            required
+          />
+          <Campo label="Número de documento *" value={form.numeroDocumento} onChange={(value) => actualizar('numeroDocumento', value)} required />
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Campo label="Primer nombre *" value={form.primerNombre} onChange={(value) => actualizar('primerNombre', value)} required />
+            <Campo label="Segundo nombre" value={form.segundoNombre} onChange={(value) => actualizar('segundoNombre', value)} />
+            <Campo label="Primer apellido *" value={form.primerApellido} onChange={(value) => actualizar('primerApellido', value)} required />
+            <Campo label="Segundo apellido" value={form.segundoApellido} onChange={(value) => actualizar('segundoApellido', value)} />
+          </div>
+          <Campo label="Teléfono" value={form.telefono} onChange={(value) => actualizar('telefono', value)} />
+          <Campo label="Correo electrónico *" type="email" value={form.correoElectronico} onChange={(value) => actualizar('correoElectronico', value)} required />
+          <Campo label="Contraseña inicial *" type="password" minLength={8} value={form.password} onChange={(value) => actualizar('password', value)} required />
+          <p className="text-xs text-gray-500">La contraseña debe tener al menos 8 caracteres. No se mostrará nuevamente.</p>
         </div>
 
         <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">
-          <p className="font-semibold text-white text-sm">Información laboral</p>
-          <Selector label="Cargo *" value={form.cargo} onChange={(v) => actualizar('cargo', v)} opciones={CARGOS} placeholder="Selecciona un cargo" required />
-          <Selector label="Sucursal *" value={form.sucursal} onChange={(v) => actualizar('sucursal', v)} opciones={['La Chinita', 'Buenavista']} placeholder="Selecciona una sucursal" required />
-          <Selector label="Rol en el sistema *" value={form.rolSistema} onChange={(v) => actualizar('rolSistema', v)} opciones={ROLES_SISTEMA} placeholder="Selecciona un rol" required />
-          <Campo label="Fecha de ingreso" value={form.fechaIngreso} onChange={(v) => actualizar('fechaIngreso', v)} type="date" />
-          <div className="flex flex-col gap-1 text-xs text-gray-400">
-            Estado
-            <div className="flex gap-2">
-              {['Activo', 'Inactivo'].map((op) => (
-                <button
-                  key={op}
-                  type="button"
-                  onClick={() => actualizar('estado', op)}
-                  className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                    form.estado === op ? 'bg-brand-yellow text-panel-sidebar' : 'bg-panel-bg border border-panel-border text-gray-300'
-                  }`}
-                >
-                  {op}
-                </button>
-              ))}
-            </div>
+          <p className="font-semibold text-white text-sm">Acceso al sistema</p>
+          <Selector
+            label="Sucursal *"
+            value={form.idSucursal}
+            onChange={(value) => actualizar('idSucursal', value)}
+            opciones={(catalogosPersonal.sucursales || []).map((sucursal) => ({
+              value: sucursal.idSucursal,
+              label: sucursal.nombreSucursal,
+            }))}
+            required
+          />
+          <Selector
+            label="Rol del sistema *"
+            value={form.idTipoUsuario}
+            onChange={(value) => actualizar('idTipoUsuario', value)}
+            opciones={roles.map((rol) => ({
+              value: rol.idTipoUsuario,
+              label: ETIQUETAS_ROL[rol.rol] || rol.nombre,
+            }))}
+            required
+          />
+          <div className="rounded-lg border border-panel-border bg-panel-bg p-3">
+            <p className="mb-2 text-xs font-semibold text-gray-400">Funciones incluidas en el rol</p>
+            {!rolSeleccionado && <p className="text-sm text-gray-500">Selecciona un rol para consultar sus funciones.</p>}
+            {rolSeleccionado && rolSeleccionado.permisos.length === 0 && (
+              <p className="text-sm text-gray-500">Este rol no tiene funciones asignadas.</p>
+            )}
+            {rolSeleccionado?.permisos.map((permiso) => (
+              <span key={permiso} className="mr-2 mb-2 inline-flex rounded-full bg-brand-yellow/15 px-2 py-1 text-xs font-semibold text-brand-yellow">
+                {permiso}
+              </span>
+            ))}
+            <p className="mt-2 text-xs text-gray-500">Los permisos se configuran en la sección Roles y permisos.</p>
           </div>
         </div>
 
-        <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">
-          <p className="font-semibold text-white text-sm">Accesos al sistema</p>
-          {modulosSistema.map((modulo) => (
-            <label key={modulo} className="flex items-center justify-between text-sm text-gray-300">
-              {modulo}
-              <button
-                type="button"
-                onClick={() => toggleAcceso(modulo)}
-                className={`h-5 w-9 rounded-full transition relative shrink-0 ${accesos[modulo] ? 'bg-brand-yellow' : 'bg-panel-border'}`}
-              >
-                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${accesos[modulo] ? 'left-4' : 'left-0.5'}`} />
-              </button>
-            </label>
-          ))}
-        </div>
-
-        <div className="lg:col-span-3 flex items-center gap-3">
-          <button type="submit" className="flex items-center gap-2 bg-brand-yellow text-panel-sidebar font-semibold text-sm rounded-lg px-5 py-2.5 hover:brightness-95 transition">
-            <Save size={16} /> Guardar empleado
+        {error && <p role="alert" className="lg:col-span-2 text-sm text-red-400">{error}</p>}
+        <div className="lg:col-span-2 flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={guardando || cargandoPersonal || !catalogosPersonal.roles?.length || !catalogosPersonal.sucursales?.length}
+            className="flex items-center gap-2 bg-brand-yellow text-panel-sidebar font-semibold text-sm rounded-lg px-5 py-2.5 hover:brightness-95 transition disabled:opacity-50"
+          >
+            <Save size={16} /> {guardando ? 'Guardando...' : 'Guardar empleado'}
           </button>
           <button type="button" onClick={() => onNavigate?.('empleados')} className="text-sm text-gray-400 hover:text-white px-4 py-2.5">
             Cancelar
@@ -121,35 +146,35 @@ export default function NuevoEmpleado({ onNavigate, onAgregarEmpleado, empleados
   )
 }
 
-function Campo({ label, value, onChange, placeholder, type = 'text', required }) {
+function Campo({ label, value, onChange, type = 'text', required, minLength }) {
   return (
     <label className="flex flex-col gap-1 text-xs text-gray-400">
       {label}
       <input
         type={type}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
         required={required}
+        minLength={minLength}
         className="bg-panel-bg border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 outline-none"
       />
     </label>
   )
 }
 
-function Selector({ label, value, onChange, opciones, placeholder, required }) {
+function Selector({ label, value, onChange, opciones, required }) {
   return (
     <label className="flex flex-col gap-1 text-xs text-gray-400">
       {label}
       <select
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(event) => onChange(event.target.value)}
         required={required}
         className="bg-panel-bg border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none"
       >
-        <option value="">{placeholder}</option>
-        {opciones.map((op) => (
-          <option key={op}>{op}</option>
+        <option value="">Selecciona una opción</option>
+        {opciones.map((opcion) => (
+          <option key={opcion.value} value={opcion.value}>{opcion.label}</option>
         ))}
       </select>
     </label>

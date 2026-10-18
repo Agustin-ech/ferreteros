@@ -16,7 +16,7 @@ class ProductoSchema(Schema):
         validate=validate.Range(min=0.01),
     )
     stockMinimo = fields.Int(load_default=5, validate=validate.Range(min=0))
-    activo = fields.Bool(dump_only=True)
+    activo = fields.Bool()
     fecha_creacion = fields.DateTime(dump_only=True)
 
 # Instancias para un solo producto o una lista de ellos

@@ -12,7 +12,13 @@ const ITEMS_POR_PAGINA = 7
 
 // Lista de empleados. `empleados` y `onAgregarEmpleado` los pasa App.jsx
 // (ver comentario ahí), así que un empleado nuevo aparece aquí sin recargar.
-export default function Empleados({ empleados = [], onNavigate, onEditarEmpleado, onEliminarEmpleado }) {
+export default function Empleados({
+  empleados = [],
+  onNavigate,
+  onEditarEmpleado,
+  onEliminarEmpleado,
+  catalogosPersonal = {},
+}) {
   const [busqueda, setBusqueda] = useState('')
   const [sucursal, setSucursal] = useState('Todas')
   const [rol, setRol] = useState('Todos')
@@ -52,11 +58,10 @@ export default function Empleados({ empleados = [], onNavigate, onEditarEmpleado
       <DetalleEmpleado
         empleado={seleccionado}
         edicionInicial={edicionInicial}
+        sucursales={catalogosPersonal.sucursales || []}
+        roles={catalogosPersonal.roles || []}
         onVolver={() => setSeleccionado(null)}
-        onGuardar={(datos) => {
-          onEditarEmpleado?.(seleccionado.id, datos)
-          setSeleccionado(null)
-        }}
+        onGuardar={(datos) => onEditarEmpleado?.(seleccionado.id, datos)}
       />
     )
   }
@@ -92,8 +97,7 @@ export default function Empleados({ empleados = [], onNavigate, onEditarEmpleado
         />
         <select value={sucursal} onChange={(e) => cambiarFiltro(setSucursal)(e.target.value)} className="bg-panel-card border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none">
           <option>Todas</option>
-          <option>La Chinita</option>
-          <option>Buenavista</option>
+          {(catalogosPersonal.sucursales || []).map((item) => <option key={item.idSucursal}>{item.nombreSucursal}</option>)}
         </select>
         <select value={rol} onChange={(e) => cambiarFiltro(setRol)(e.target.value)} className="bg-panel-card border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none">
           {roles.map((r) => (
@@ -141,11 +145,11 @@ export default function Empleados({ empleados = [], onNavigate, onEditarEmpleado
                           label: e.estado === 'Activo' ? 'Desactivar' : 'Activar',
                           onClick: () => onEditarEmpleado?.(e.id, { estado: e.estado === 'Activo' ? 'Inactivo' : 'Activo' }),
                         },
-                        {
-                          label: 'Eliminar empleado',
-                          destructivo: true,
-                          onClick: () => onEliminarEmpleado?.(e.id),
-                        },
+                        ...(e.estado === 'Activo' ? [{
+                            label: 'Desactivar empleado',
+                            destructivo: true,
+                            onClick: () => onEliminarEmpleado?.(e.id),
+                          }] : []),
                       ]}
                     />
                   </div>

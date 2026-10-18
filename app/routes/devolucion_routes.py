@@ -8,6 +8,7 @@ from app.schemas.devolucion_schema import (
 )
 from app.services.devolucion_service import DevolucionService
 from app.utils.decorators import requiere_rol
+from app.utils.roles import normalizar_rol
 
 devolucion_bp = Blueprint("devolucion_bp", __name__, url_prefix="/api/devoluciones")
 
@@ -16,7 +17,7 @@ def _usuario_actual():
     claims = get_jwt()
     return {
         "id": int(get_jwt_identity()),
-        "rol": claims.get("rol"),
+        "rol": normalizar_rol(claims.get("rol")),
         "sucursal_id": claims.get("idSucursal"),
     }
 

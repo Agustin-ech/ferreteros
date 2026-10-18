@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import logo from '../assets/logo.png'
 import api from '../api/client'
+import { errorMessage } from '../api/client'
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, mensajeSesion = '' }) {
   const [primerNombre, setPrimerNombre] = useState('')
   const [clave, setClave] = useState('')
   const [verClave, setVerClave] = useState(false)
@@ -22,7 +23,7 @@ export default function Login({ onLogin }) {
       })
       onLogin(respuesta.data)
     } catch (err) {
-      const mensaje = err.response?.data?.mensaje
+      const mensaje = errorMessage(err, 'No se pudo iniciar sesión.')
       if (err.response?.status === 401) {
         setError('Nombre o contraseña incorrectos.')
       } else if (err.response?.status === 403 || err.response?.status === 400) {
@@ -85,7 +86,7 @@ export default function Login({ onLogin }) {
             </div>
           </label>
 
-          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+          {(error || mensajeSesion) && <p role="alert" className="text-sm text-red-600">{error || mensajeSesion}</p>}
 
           <button disabled={enviando} type="submit" className="w-full rounded-md bg-[#F2B01E] py-2 font-semibold text-black hover:brightness-110 disabled:cursor-wait disabled:opacity-60">
             {enviando ? 'Conectando...' : 'Ingresar'}

@@ -1,19 +1,14 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import api from "../api/client";
+import { errorMessage } from "../api/client";
 
 const hoy = () => new Date().toISOString().slice(0, 10);
 
-const danadosIniciales = [
-  { id: 1, fecha: "2026-09-10", codigo: "PRT-005", producto: "Martillo 16oz", cantidad: 2, motivo: "Producto roto", descripcion: "Cabeza dañada", estado: "Pendiente" },
-  { id: 2, fecha: "2026-09-09", codigo: "PRT-003", producto: "Pintura blanca", cantidad: 3, motivo: "Caja dañada", descripcion: "Caja rota", estado: "Pendiente" },
-  { id: 3, fecha: "2026-09-08", codigo: "PRT-001", producto: "Tornillo 5mm", cantidad: 10, motivo: "Faltantes", descripcion: "No vino la cantidad completa", estado: "Revisado" },
-];
-
-const recibidosIniciales = [
-  { id: 1, fecha: "2026-09-10", factura: "FAC-0891", codigo: "PRT-001", producto: "Tornillo 5mm", cantidad: 100, proveedor: "Ferretería La 15", estado: "Recibido" },
-  { id: 2, fecha: "2026-09-09", factura: "FAC-0887", codigo: "PRT-002", producto: "Cemento gris", cantidad: 40, proveedor: "Ferretería La 15", estado: "Recibido" },
-  { id: 3, fecha: "2026-09-08", factura: "FAC-0880", codigo: "PRT-003", producto: "Pintura blanca", cantidad: 20, proveedor: "Pintuco SA", estado: "Recibido" },
-];
+const inicioConsultaDanados = () => {
+  const fecha = new Date();
+  fecha.setUTCFullYear(fecha.getUTCFullYear() - 5);
+  return fecha.toISOString().slice(0, 10);
+};
 
 const Ctx = createContext(null);
 export const useBodega = () => useContext(Ctx);
@@ -23,102 +18,170 @@ const numero = (valor, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
-const normalizarProducto = (producto, stockDisponible = 0) => {
+const mensajeError = errorMessage;
+
+const normalizarDanado = (registro) => ({
+  ...registro,
+  id: registro.idMercanciaDanada,
+  fecha: registro.fecha?.slice(0, 10) || "",
+  codigo: registro.codigo || "",
+  producto: registro.producto || "",
+  motivo: registro.tipoDanio || "",
+});
+
+const normalizarRecibido = (registro) => ({
+  ...registro,
+  id: registro.idMercanciaRecibida,
+  fecha: registro.fecha?.slice(0, 10) || "",
+  cantidad: numero(registro.cantidad, 0),
+});
+
+const normalizarProducto = (producto, stockDisponible = 0, tipos = [], unidades = []) => {
   const codigo = producto.codigoSKU || producto.codigo || "";
   const nombre = producto.nombre || "";
-  const tipo = producto.tipo || producto.tipo_producto?.nombre || `Tipo ${producto.idTipoProducto || 1}`;
-  const categoria = producto.categoria || producto.tipo_producto?.nombre || tipo;
-  const unidad = producto.unidad || producto.unidadMedida?.nombre || `Unidad ${producto.idUnidadMedida || 1}`;
+  const tipo = producto.tipo || tipos.find((item) => item.idTipoProducto === producto.idTipoProducto)?.nombre || "";
+  const unidad = producto.unidad || unidades.find((item) => item.idUnidadMedida === producto.idUnidadMedida)?.nombre || "";
 
   return {
     idProducto: producto.idProducto ?? null,
     codigo,
     nombre,
     tipo,
-    categoria,
-    marca: producto.marca || "",
+    categoria: tipo,
+    marca: "",
     unidad,
     stock: numero(stockDisponible, producto.stock ?? 0),
     compra: numero(producto.costoUnitario ?? producto.compra ?? 0),
     venta: numero(producto.precio ?? producto.venta ?? 0),
-    proveedor: producto.proveedor || "",
+    proveedor: "",
     estado: producto.activo === false ? "Inactivo" : "Activo",
     descripcion: producto.descripcion || "",
-    idTipoProducto: producto.idTipoProducto ?? 1,
-    idUnidadMedida: producto.idUnidadMedida ?? 1,
+    idTipoProducto: producto.idTipoProducto,
+    idUnidadMedida: producto.idUnidadMedida,
     stockMinimo: producto.stockMinimo ?? 5,
     codigoSKU: codigo,
+    activo: producto.activo !== false,
   };
 };
 
-async function obtenerSucursalActual() {
-  try {
-    const { data } = await api.get("/api/auth/me");
-    return Number(data?.usuario?.idSucursal ?? 1);
-  } catch {
-    return 1;
-  }
-}
-
 export function BodegaProvider({ children }) {
   const [productos, setProductos] = useState([]);
-  const [danados, setDanados] = useState(danadosIniciales);
-  const [recibidos, setRecibidos] = useState(recibidosIniciales);
+  const [tiposProducto, setTiposProducto] = useState([]);
+  const [unidadesMedida, setUnidadesMedida] = useState([]);
+  const [idSucursal, setIdSucursal] = useState(null);
+  const [nombreSucursal, setNombreSucursal] = useState("");
+  const [danados, setDanados] = useState([]);
+  const [danadosTotal, setDanadosTotal] = useState(0);
+  const [danadosCargando, setDanadosCargando] = useState(false);
+  const [danadosError, setDanadosError] = useState("");
+  const [tiposDanio, setTiposDanio] = useState([]);
+  const [tiposDanioError, setTiposDanioError] = useState("");
+  const [recibidos, setRecibidos] = useState([]);
+  const [recibidosCargando, setRecibidosCargando] = useState(false);
+  const [recibidosError, setRecibidosError] = useState("");
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let cancelado = false;
+  const cargarDanados = useCallback(async (pagina = 1, buscar = "", sucursal = idSucursal) => {
+    setDanadosCargando(true);
+    setDanadosError("");
+    try {
+      const params = {
+        pagina,
+        por_pagina: 5,
+        desde: inicioConsultaDanados(),
+        hasta: hoy(),
+        buscar: buscar.trim() || undefined,
+      };
+      if (sucursal) params.sucursal_id = sucursal;
+      const { data } = await api.get("/api/v1/mercancia-danada", { params });
+      setDanados((data.datos || []).map(normalizarDanado));
+      setDanadosTotal(data.paginacion?.total || 0);
+    } catch (err) {
+      setDanadosError(mensajeError(err, "No se pudo cargar la mercancía dañada."));
+    } finally {
+      setDanadosCargando(false);
+    }
+  }, [idSucursal]);
 
-    const cargarDatos = async () => {
-      setCargando(true);
-      setError("");
-      try {
-        const { data: perfil } = await api.get("/api/auth/me");
-        const usuario = perfil?.usuario || {};
-        const rol = String(usuario.rol || "").toLowerCase();
-        const sucursal = rol === "admin" ? null : Number(usuario.idSucursal || 1);
-
-        const [productosRes, inventarioRes] = await Promise.all([
-          api.get("/api/productos"),
-          sucursal ? api.get("/api/inventario", { params: { sucursal } }) : api.get("/api/inventario"),
-        ]);
-
-        const inventarioPorProducto = {};
-        for (const item of inventarioRes.data || []) {
-          inventarioPorProducto[item.idProducto] = numero(item.cantidadDisponible, 0);
-        }
-
-        const lista = (productosRes.data || []).map((producto) =>
-          normalizarProducto(producto, inventarioPorProducto[producto.idProducto] ?? 0)
-        );
-
-        if (!cancelado) setProductos(lista);
-      } catch (err) {
-        if (!cancelado) {
-          setProductos([]);
-          setError(
-            err?.response?.data?.mensaje ||
-            err?.response?.data?.error ||
-            "No se pudieron cargar los productos e inventario del backend."
-          );
-        }
-      } finally {
-        if (!cancelado) setCargando(false);
-      }
-    };
-
-    cargarDatos();
-    return () => {
-      cancelado = true;
-    };
+  const cargarTiposDanio = useCallback(async () => {
+    setTiposDanioError("");
+    try {
+      const { data } = await api.get("/api/v1/mercancia-danada/tipos-danio");
+      setTiposDanio(data || []);
+    } catch (err) {
+      setTiposDanioError(mensajeError(err, "No se pudieron cargar los tipos de daño."));
+    }
   }, []);
 
-  const actualizarStock = async (codigo, delta) => {
-    const producto = productos.find((p) => p.codigo === codigo);
-    if (!producto) return null;
+  const cargarRecibidos = useCallback(async () => {
+    setRecibidosCargando(true);
+    setRecibidosError("");
+    try {
+      const { data } = await api.get("/api/v1/mercancia-recibida");
+      setRecibidos((data || []).map(normalizarRecibido));
+    } catch (err) {
+      setRecibidosError(mensajeError(err, "No se pudieron cargar los ingresos de mercancía."));
+    } finally {
+      setRecibidosCargando(false);
+    }
+  }, []);
 
-    const idSucursal = await obtenerSucursalActual();
+  const cargarDatos = useCallback(async () => {
+    setCargando(true);
+    setError("");
+    setNombreSucursal("");
+    try {
+      const { data: perfil } = await api.get("/api/auth/me");
+      const usuario = perfil?.usuario || {};
+      const sucursalUsuario = Number(usuario.idSucursal);
+      const sucursal = Number.isInteger(sucursalUsuario) && sucursalUsuario > 0
+        ? sucursalUsuario
+        : null;
+      setIdSucursal(sucursal);
+
+      const [productosRes, inventarioRes, catalogosRes, sucursalRes] = await Promise.all([
+        api.get("/api/productos", { params: { incluirInactivos: true } }),
+        sucursal
+          ? api.get("/api/inventario", { params: { sucursal } })
+          : api.get("/api/inventario"),
+        api.get("/api/productos/catalogos"),
+        sucursal ? api.get(`/api/sucursales/${sucursal}`) : Promise.resolve(null),
+      ]);
+      const tipos = catalogosRes.data?.tipos || [];
+      const unidades = catalogosRes.data?.unidades || [];
+      const inventarioPorProducto = {};
+      for (const item of inventarioRes.data || []) {
+        inventarioPorProducto[item.idProducto] =
+          (inventarioPorProducto[item.idProducto] || 0) + numero(item.cantidadDisponible, 0);
+      }
+
+      setTiposProducto(tipos);
+      setUnidadesMedida(unidades);
+      setNombreSucursal(sucursalRes?.data?.nombreSucursal || "");
+      setProductos((productosRes.data || []).map((producto) =>
+        normalizarProducto(producto, inventarioPorProducto[producto.idProducto] ?? 0, tipos, unidades)
+      ));
+      await cargarDanados(1, "", sucursal);
+      await cargarTiposDanio();
+      await cargarRecibidos();
+    } catch (err) {
+      setError(mensajeError(err, "No se pudieron cargar los productos e inventario del backend."));
+    } finally {
+      setCargando(false);
+    }
+  }, [cargarDanados, cargarTiposDanio, cargarRecibidos]);
+
+  useEffect(() => {
+    cargarDatos();
+  }, [cargarDatos]);
+
+  const actualizarStock = async (codigo, delta, motivo, productoOverride = null) => {
+    const producto = productoOverride || productos.find((p) => p.codigo === codigo);
+    if (!producto) throw new Error("No se encontró el producto seleccionado.");
+    if (!idSucursal) throw new Error("No hay una sucursal asignada para registrar el ajuste.");
+    if (!motivo?.trim()) throw new Error("Escribe el motivo del ajuste.");
+
     const cantidad = Math.abs(delta);
     const operacion = delta >= 0 ? "suma" : "resta";
 
@@ -127,6 +190,7 @@ export function BodegaProvider({ children }) {
       idSucursal,
       cantidad,
       operacion,
+      motivo: motivo.trim(),
     });
 
     const stockActual = numero(data?.inventario_actualizado?.cantidadDisponible, producto.stock + delta);
@@ -139,26 +203,55 @@ export function BodegaProvider({ children }) {
 
   const apiBodega = {
     productos,
+    tiposProducto,
+    unidadesMedida,
+    nombreSucursal,
     danados,
+    danadosTotal,
+    danadosCargando,
+    danadosError,
+    cargarDanados,
+    tiposDanio,
+    tiposDanioError,
+    cargarTiposDanio,
     recibidos,
+    recibidosCargando,
+    recibidosError,
+    cargarRecibidos,
     hoy,
     cargando,
     error,
+    recargar: cargarDatos,
     agregarProducto: async (p) => {
       const payload = {
-        idTipoProducto: Number(p.idTipoProducto ?? 1),
-        idUnidadMedida: Number(p.idUnidadMedida ?? 1),
+        idTipoProducto: Number(p.idTipoProducto),
+        idUnidadMedida: Number(p.idUnidadMedida),
         codigoSKU: String(p.codigo || p.codigoSKU || "").trim(),
         nombre: String(p.nombre || "").trim(),
         descripcion: p.descripcion || null,
         precio: numero(p.venta ?? p.precio, 0),
         costoUnitario: numero(p.compra ?? p.costoUnitario, 0),
         stockMinimo: Number(p.stockMinimo || 5),
+        activo: p.estado !== "Inactivo",
       };
 
       const { data } = await api.post("/api/productos", payload);
-      const productoNormalizado = normalizarProducto(data, 0);
+      const productoNormalizado = normalizarProducto(data, 0, tiposProducto, unidadesMedida);
       setProductos((ps) => [productoNormalizado, ...ps]);
+      const stockInicial = numero(p.stock, 0);
+      if (stockInicial > 0) {
+        try {
+          await actualizarStock(
+            productoNormalizado.codigo,
+            stockInicial,
+            "Stock inicial al registrar producto",
+            productoNormalizado
+          );
+        } catch (err) {
+          const detalle = err?.response?.data?.mensaje || err?.response?.data?.error || err.message;
+          throw new Error(`El producto se creó, pero no se pudo registrar su stock inicial: ${detalle}`);
+        }
+      }
       return productoNormalizado;
     },
     actualizarProducto: async (codigo, cambios) => {
@@ -173,57 +266,93 @@ export function BodegaProvider({ children }) {
         descripcion: producto.descripcion,
         precio: numero(cambios.venta ?? cambios.precio ?? producto.venta, 0),
         costoUnitario: numero(cambios.compra ?? cambios.costoUnitario ?? producto.compra, 0),
+        activo: cambios.estado ? cambios.estado !== "Inactivo" : producto.activo,
       };
 
       const { data } = await api.put(`/api/productos/${producto.idProducto}`, payload);
-      const actualizado = normalizarProducto(data, producto.stock);
+      const actualizado = normalizarProducto(data, producto.stock, tiposProducto, unidadesMedida);
       setProductos((ps) => ps.map((p) => (p.idProducto === producto.idProducto ? actualizado : p)));
       return actualizado;
     },
-    eliminarProducto: (codigo) => {
-      setProductos((ps) => ps.filter((p) => p.codigo !== codigo));
+    eliminarProducto: async (codigo) => {
+      const producto = productos.find((p) => p.codigo === codigo);
+      if (!producto) throw new Error("No se encontró el producto seleccionado.");
+      const { data } = await api.delete(`/api/productos/${producto.idProducto}`);
+      const actualizado = normalizarProducto(data, producto.stock, tiposProducto, unidadesMedida);
+      setProductos((ps) => ps.map((p) => (p.idProducto === producto.idProducto ? actualizado : p)));
+      return actualizado;
     },
-    fijarStock: async (codigo, stock) => {
+    fijarStock: async (codigo, stock, motivo) => {
       const producto = productos.find((p) => p.codigo === codigo);
       if (!producto) return null;
       const actual = numero(producto.stock, 0);
       const nuevo = Math.max(0, numero(stock, 0));
       if (nuevo === actual) return null;
       const delta = nuevo - actual;
-      return actualizarStock(codigo, delta);
+      return actualizarStock(codigo, delta, motivo);
     },
     agregarDanado: async (d) => {
       const producto = productos.find((p) => p.codigo === d.codigo);
-      if (!producto) return null;
-      const { data } = await api.post("/api/inventario/ajustar", {
+      if (!producto) throw new Error("No se encontró el producto seleccionado.");
+      if (!idSucursal) throw new Error("No hay una sucursal asignada para registrar la salida.");
+      const { data } = await api.post("/api/v1/mercancia-danada", {
         idProducto: producto.idProducto,
-        idSucursal: await obtenerSucursalActual(),
+        idSucursal,
+        idTipoDanio: Number(d.idTipoDanio),
         cantidad: numero(d.cantidad, 0),
-        operacion: "resta",
+        fecha: `${d.fecha}T12:00:00`,
+        descripcion: d.descripcion.trim(),
       });
 
-      setDanados((ds) => [{ ...d, id: Date.now(), estado: "Pendiente" }, ...ds]);
-      const stockActual = numero(data?.inventario_actualizado?.cantidadDisponible, Math.max(0, producto.stock - numero(d.cantidad, 0)));
+      setDanados((ds) => [normalizarDanado(data), ...ds].slice(0, 5));
+      setDanadosTotal((total) => total + 1);
+      const stockActual = numero(data.existenciasRestantes, Math.max(0, producto.stock - numero(d.cantidad, 0)));
       setProductos((ps) =>
         ps.map((p) => (p.idProducto === producto.idProducto ? { ...p, stock: stockActual } : p))
       );
       return data;
     },
-    alternarEstadoDanado: (id) =>
-      setDanados((ds) => ds.map((d) => (d.id === id ? { ...d, estado: d.estado === "Pendiente" ? "Revisado" : "Pendiente" } : d))),
-    eliminarDanado: (id) => setDanados((ds) => ds.filter((d) => d.id !== id)),
+    cambiarEstadoDanado: async (id, estado) => {
+      const { data } = await api.patch(`/api/v1/mercancia-danada/${id}/estado`, { estado });
+      setDanados((ds) => ds.map((d) => (d.id === id ? normalizarDanado(data) : d)));
+      if (data.existenciasActuales !== undefined) {
+        const registro = danados.find((d) => d.id === id);
+        setProductos((ps) => ps.map((p) =>
+          p.idProducto === registro?.idProducto
+            ? { ...p, stock: numero(data.existenciasActuales, p.stock) }
+            : p
+        ));
+      }
+      return data;
+    },
+    eliminarDanado: async (id) => {
+      const { data } = await api.delete(`/api/v1/mercancia-danada/${id}`);
+      const registro = danados.find((d) => d.id === id);
+      setDanados((ds) => ds.filter((d) => d.id !== id));
+      setDanadosTotal((total) => Math.max(0, total - 1));
+      setProductos((ps) => ps.map((p) =>
+        p.idProducto === registro?.idProducto
+          ? { ...p, stock: numero(data.existenciasActuales, p.stock) }
+          : p
+      ));
+      return data;
+    },
     agregarRecibido: async (r) => {
       const producto = productos.find((p) => p.codigo === r.codigo);
-      if (!producto) return null;
-      const { data } = await api.post("/api/inventario/ajustar", {
+      if (!producto) throw new Error("No se encontró el producto seleccionado.");
+      if (!idSucursal) throw new Error("No hay una sucursal asignada para registrar el ingreso.");
+      const { data } = await api.post("/api/v1/mercancia-recibida", {
         idProducto: producto.idProducto,
-        idSucursal: await obtenerSucursalActual(),
+        idSucursal,
         cantidad: numero(r.cantidad, 0),
-        operacion: "suma",
+        fecha: r.fecha,
+        factura: r.factura,
+        proveedor: r.proveedor,
       });
 
-      setRecibidos((rs) => [{ ...r, id: Date.now(), estado: "Recibido" }, ...rs]);
-      const stockActual = numero(data?.inventario_actualizado?.cantidadDisponible, producto.stock + numero(r.cantidad, 0));
+      setRecibidos((rs) => [normalizarRecibido(data), ...rs]);
+      setRecibidosError("");
+      const stockActual = numero(data?.existenciasRestantes, producto.stock + numero(r.cantidad, 0));
       setProductos((ps) =>
         ps.map((p) => (p.idProducto === producto.idProducto ? { ...p, stock: stockActual } : p))
       );
@@ -231,8 +360,9 @@ export function BodegaProvider({ children }) {
     },
     reiniciarDatos: () => {
       setProductos([]);
-      setDanados(danadosIniciales);
-      setRecibidos(recibidosIniciales);
+      setDanados([]);
+      setDanadosTotal(0);
+      setRecibidos([]);
     },
   };
 
