@@ -6,23 +6,30 @@ import { buscarClientes, listarVentas, obtenerFactura, obtenerVenta } from '../.
 const moneda = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 const fechaLegible = (valor) => valor ? new Date(valor).toLocaleString('es-CO') : 'Sin fecha'
 
+// Medianoche local del día elegido, enviada en ISO (UTC) al backend, que
+// guarda fechaHora en UTC. Usar medianoche UTC corría el día 5 horas.
 function fechaISO(dia, sumarDia = false) {
   if (!dia) return undefined
-  const fecha = new Date(`${dia}T00:00:00.000Z`)
-  if (sumarDia) fecha.setUTCDate(fecha.getUTCDate() + 1)
+  const fecha = new Date(`${dia}T00:00:00`)
+  if (sumarDia) fecha.setDate(fecha.getDate() + 1)
   return fecha.toISOString()
 }
 
+function diaLocal(fecha) {
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0')
+  const dia = String(fecha.getDate()).padStart(2, '0')
+  return `${fecha.getFullYear()}-${mes}-${dia}`
+}
+
 export default function HistorialVentasIntegrado({ titulo, soloHoy = false, modo = 'ventas', idSucursal }) {
-  const hoy = new Date().toISOString().slice(0, 10)
-  const manana = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+  const hoy = diaLocal(new Date())
   const [fechaDesde, setFechaDesde] = useState(soloHoy ? hoy : '')
-  const [fechaHasta, setFechaHasta] = useState(soloHoy ? manana : '')
+  const [fechaHasta, setFechaHasta] = useState(soloHoy ? hoy : '')
   const [metodoPago, setMetodoPago] = useState('')
   const [clienteTexto, setClienteTexto] = useState('')
   const [clienteElegido, setClienteElegido] = useState(null)
   const [clientes, setClientes] = useState([])
-  const [filtros, setFiltros] = useState({ desde: soloHoy ? fechaISO(hoy) : undefined, hasta: soloHoy ? fechaISO(manana) : undefined })
+  const [filtros, setFiltros] = useState({ desde: soloHoy ? fechaISO(hoy) : undefined, hasta: soloHoy ? fechaISO(hoy, true) : undefined })
   const [pagina, setPagina] = useState(1)
   const [listado, setListado] = useState({ data: [], paginacion: { total: 0, paginas: 0 } })
   const [cargando, setCargando] = useState(true)

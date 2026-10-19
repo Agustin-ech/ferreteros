@@ -21,7 +21,13 @@ const estadoStyles = {
   Agotado: 'bg-red-500/15 text-red-400',
 }
 
-export default function ProductDetailPanel({ producto, sucursales = [], onAjusteGuardado, onVolver }) {
+export default function ProductDetailPanel({
+  producto,
+  sucursales = [],
+  onAjusteGuardado,
+  onProductoActualizado,
+  onVolver,
+}) {
   const stockPorSucursal = (sucursales || []).map((sucursal) => ({
     nombre: sucursal.nombreSucursal,
     id: sucursal.idSucursal,
@@ -44,6 +50,9 @@ export default function ProductDetailPanel({ producto, sucursales = [], onAjuste
   const [cargandoHistorial, setCargandoHistorial] = useState(false)
   const [errorHistorial, setErrorHistorial] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [guardandoProducto, setGuardandoProducto] = useState(false)
+  const [precioVenta, setPrecioVenta] = useState(String(producto.precio))
+  const [costoCompra, setCostoCompra] = useState(String(producto.compra ?? 0))
   const [mensaje, setMensaje] = useState('')
   const [esError, setEsError] = useState(false)
 
@@ -56,6 +65,11 @@ export default function ProductDetailPanel({ producto, sucursales = [], onAjuste
   useEffect(() => {
     setNuevaCantidad(stockActual)
   }, [producto.id, idSucursal, stockActual])
+
+  useEffect(() => {
+    setPrecioVenta(String(producto.precio))
+    setCostoCompra(String(producto.compra ?? 0))
+  }, [producto.id, producto.precio, producto.compra])
 
   const cargarHistorial = useCallback(async () => {
     if (!producto.id || !idSucursal) {
@@ -78,6 +92,35 @@ export default function ProductDetailPanel({ producto, sucursales = [], onAjuste
     }
   }, [producto.id, idSucursal])
 
+  async function handleGuardarPrecios(e) {
+    e.preventDefault()
+    setMensaje('')
+    const precio = Number(precioVenta)
+    const costoUnitario = Number(costoCompra)
+    if (!Number.isFinite(precio) || precio < 0.01 || !Number.isFinite(costoUnitario) || costoUnitario < 0.01) {
+      setEsError(true)
+      setMensaje('Los precios de compra y venta deben ser mayores que cero.')
+      return
+    }
+
+    setGuardandoProducto(true)
+    try {
+      const { data } = await api.put(`/api/productos/${producto.id}`, {
+        idTipoProducto: producto.idTipoProducto,
+        idUnidadMedida: producto.idUnidadMedida,
+        precio,
+        costoUnitario,
+      })
+      onProductoActualizado?.(data)
+      setEsError(false)
+      setMensaje('Precios del producto actualizados.')
+    } catch (error) {
+      setEsError(true)
+      setMensaje(error?.response?.data?.mensaje || error?.response?.data?.error || 'No se pudieron actualizar los precios.')
+    } finally {
+      setGuardandoProducto(false)
+    }
+  }
   useEffect(() => { cargarHistorial() }, [cargarHistorial])
 
   async function handleGuardar(e) {
@@ -171,6 +214,10 @@ export default function ProductDetailPanel({ producto, sucursales = [], onAjuste
               <p className="font-semibold text-white">{formatoCOP.format(producto.precio)}</p>
             </div>
             <div>
+              <p className="text-xs text-gray-500">Precio de compra</p>
+              <p className="font-semibold text-white">{formatoCOP.format(producto.compra)}</p>
+            </div>
+            <div>
               <p className="text-xs text-gray-500">Valor total del inventario</p>
               <p className="font-semibold text-white">{formatoCOP.format(valorTotal)}</p>
             </div>
@@ -183,6 +230,28 @@ export default function ProductDetailPanel({ producto, sucursales = [], onAjuste
             </span>
           </div>
         </div>
+
+        <form onSubmit={handleGuardarPrecios} className="border border-panel-border rounded-lg p-3 flex flex-col gap-3">
+          <p className="text-xs font-semibold text-gray-300">Editar precios del producto</p>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1 text-xs text-gray-400">
+              Precio de venta
+              <input type="number" min="0.01" step="0.01" value={precioVenta} onChange={(e) => setPrecioVenta(e.target.value)} className="bg-panel-bg border border-panel-border rounded-lg px-2.5 py-2 text-sm text-gray-200 outline-none" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-gray-400">
+              Precio de compra
+              <input type="number" min="0.01" step="0.01" value={costoCompra} onChange={(e) => setCostoCompra(e.target.value)} className="bg-panel-bg border border-panel-border rounded-lg px-2.5 py-2 text-sm text-gray-200 outline-none" />
+            </label>
+          </div>
+          <button type="submit" disabled={guardandoProducto} className="flex items-center justify-center gap-2 bg-panel-bg border border-panel-border text-gray-200 font-semibold text-sm rounded-lg py-2 hover:bg-white/5 disabled:opacity-50">
+            <Save size={15} /> {guardandoProducto ? 'Guardando...' : 'Guardar precios'}
+          </button>
+          {mensaje && (
+            <p role="status" className={`text-xs text-center ${esError ? 'text-red-400' : 'text-emerald-400'}`}>
+              {mensaje}
+            </p>
+          )}
+        </form>
 
         <form onSubmit={handleGuardar} className="border border-brand-yellow/40 rounded-lg p-3 flex flex-col gap-3">
           <p className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">

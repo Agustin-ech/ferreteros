@@ -7,6 +7,32 @@ import { errorMessage } from '../api/client'
 // entrar desde el lápiz de la lista, `edicionInicial` llega en true.
 const ETIQUETAS_ROL = { admin: 'Administrador', vendedor: 'Vendedor', bodega: 'Bodeguero' }
 
+function aFormulario(empleado) {
+  return {
+    ...empleado,
+    idSucursal: empleado.idSucursal ? String(empleado.idSucursal) : '',
+    idTipoUsuario: empleado.idTipoUsuario ? String(empleado.idTipoUsuario) : '',
+  }
+}
+
+// Solo los campos que acepta PUT /api/usuarios/<id>; el backend rechaza
+// cualquier campo desconocido.
+function aPayload(form) {
+  const payload = {
+    primerNombre: form.primerNombre,
+    segundoNombre: form.segundoNombre || null,
+    primerApellido: form.primerApellido,
+    segundoApellido: form.segundoApellido || null,
+    numeroDocumento: form.cedula,
+    telefono: form.telefono || null,
+    correoElectronico: form.correo,
+    activo: form.estado === 'Activo',
+  }
+  if (form.idTipoUsuario) payload.idTipoUsuario = Number(form.idTipoUsuario)
+  if (form.idSucursal) payload.idSucursal = Number(form.idSucursal)
+  return payload
+}
+
 export default function DetalleEmpleado({
   empleado,
   edicionInicial = false,
@@ -16,7 +42,7 @@ export default function DetalleEmpleado({
   onGuardar,
 }) {
   const [editando, setEditando] = useState(edicionInicial)
-  const [form, setForm] = useState({ ...empleado })
+  const [form, setForm] = useState(() => aFormulario(empleado))
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
 
@@ -29,8 +55,8 @@ export default function DetalleEmpleado({
     setError('')
     setGuardando(true)
     try {
-      const actualizado = await onGuardar(form)
-      if (actualizado) setForm({ ...actualizado })
+      const actualizado = await onGuardar(aPayload(form))
+      if (actualizado) setForm(aFormulario(actualizado))
       setEditando(false)
     } catch (saveError) {
       setError(errorMessage(saveError, 'No se pudo guardar el empleado.'))
@@ -40,7 +66,8 @@ export default function DetalleEmpleado({
   }
 
   function cancelarEdicion() {
-    setForm({ ...empleado })
+    setForm(aFormulario(empleado))
+    setError('')
     setEditando(false)
   }
 
@@ -56,7 +83,7 @@ export default function DetalleEmpleado({
               <ArrowLeft size={13} /> Volver a empleados
             </button>
             <h1 className="text-xl font-bold text-white">{form.nombre}</h1>
-            <p className="text-sm text-gray-500">{form.rolSistema} · {form.sucursal}</p>
+            <p className="text-sm text-gray-500">{empleado.rolSistema} · {empleado.sucursal || 'Sin sucursal'}</p>
           </div>
         </div>
         {!editando && (
@@ -83,8 +110,22 @@ export default function DetalleEmpleado({
 
         <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">
           <p className="font-semibold text-white text-sm">Información laboral</p>
-          <Selector label="Sucursal" value={form.sucursal} editando={editando} onChange={(v) => actualizar('sucursal', v)} opciones={sucursales.map((item) => item.nombreSucursal)} />
-          <Selector label="Rol en el sistema" value={form.rolSistema} editando={editando} onChange={(v) => actualizar('rolSistema', v)} opciones={roles.map((item) => ETIQUETAS_ROL[item.rol] || item.nombre)} />
+          <Selector
+            label="Sucursal"
+            value={form.idSucursal}
+            texto={empleado.sucursal}
+            editando={editando}
+            onChange={(v) => actualizar('idSucursal', v)}
+            opciones={sucursales.map((item) => ({ value: String(item.idSucursal), label: item.nombreSucursal }))}
+          />
+          <Selector
+            label="Rol en el sistema"
+            value={form.idTipoUsuario}
+            texto={empleado.rolSistema}
+            editando={editando}
+            onChange={(v) => actualizar('idTipoUsuario', v)}
+            opciones={roles.map((item) => ({ value: String(item.idTipoUsuario), label: ETIQUETAS_ROL[item.rol] || item.nombre }))}
+          />
           <div className="flex flex-col gap-1 text-xs text-gray-400">
             Estado
             {editando ? (
@@ -158,12 +199,12 @@ function Campo({ label, value, editando, onChange, type = 'text' }) {
   )
 }
 
-function Selector({ label, value, editando, onChange, opciones }) {
+function Selector({ label, value, texto, editando, onChange, opciones }) {
   if (!editando) {
     return (
       <div>
         <p className="text-xs text-gray-500">{label}</p>
-        <p className="text-sm text-gray-200">{value || '-'}</p>
+        <p className="text-sm text-gray-200">{texto || '-'}</p>
       </div>
     )
   }
@@ -171,8 +212,9 @@ function Selector({ label, value, editando, onChange, opciones }) {
     <label className="flex flex-col gap-1 text-xs text-gray-400">
       {label}
       <select value={value} onChange={(e) => onChange(e.target.value)} className="bg-panel-bg border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none">
+        {!value && <option value="">Selecciona una opción</option>}
         {opciones.map((op) => (
-          <option key={op}>{op}</option>
+          <option key={op.value} value={op.value}>{op.label}</option>
         ))}
       </select>
     </label>

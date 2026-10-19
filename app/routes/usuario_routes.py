@@ -398,3 +398,27 @@ def actualizar_rol(tipo_usuario_id):
 def listar_funciones():
     funciones = Funcion.query.filter_by(activo=True).order_by(Funcion.nombre).all()
     return jsonify([funcion.to_dict() for funcion in funciones]), 200
+
+
+@usuario_bp.route("/api/usuarios/nombres", methods=["GET"])
+@roles_required("admin")
+def listar_nombres_usuarios():
+    usuarios = Usuario.query.order_by(Usuario.idUsuario).all()
+    return jsonify({
+        "data": [
+            {
+                "idUsuario": usuario.idUsuario,
+                "nombre": " ".join(
+                    parte
+                    for parte in (
+                        usuario.primerNombre,
+                        usuario.segundoNombre,
+                        usuario.primerApellido,
+                        usuario.segundoApellido,
+                    )
+                    if parte
+                ),
+            }
+            for usuario in usuarios
+        ],
+    }), 200

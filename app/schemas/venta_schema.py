@@ -57,6 +57,7 @@ class FacturaOutputSchema(Schema):
     numeroFactura = fields.Str(dump_only=True)
     fechaEmision = fields.DateTime(dump_only=True)
     total = fields.Float(attribute="valorTotal")
+    activo = fields.Bool(dump_only=True)
 
 
 class FacturaDetalleOutputSchema(FacturaOutputSchema):
@@ -166,10 +167,13 @@ class FacturaDetalleOutputSchema(FacturaOutputSchema):
 
 class VentaOutputSchema(Schema):
     idVenta = fields.Int(dump_only=True)
+    activo = fields.Bool(dump_only=True)
     idCliente = fields.Int()
+    nombreCliente = fields.Method("obtener_nombre_cliente", dump_only=True)
     clienteNombre = fields.Method("obtener_nombre_cliente", dump_only=True)
     idSucursal = fields.Int()
     idUsuario = fields.Int()
+    nombreVendedor = fields.Method("obtener_nombre_vendedor", dump_only=True)
     idTipoVenta = fields.Int()
     idMetodoPago = fields.Int()
     metodoPago = fields.Method("obtener_nombre_metodo_pago", dump_only=True)
@@ -183,6 +187,17 @@ class VentaOutputSchema(Schema):
 
     def obtener_nombre_metodo_pago(self, venta):
         return venta.metodo_pago.nombre if venta.metodo_pago else None
+
+    def obtener_nombre_vendedor(self, venta):
+        if not venta.usuario:
+            return f"Usuario #{venta.idUsuario}"
+        nombres = (
+            venta.usuario.primerNombre,
+            venta.usuario.segundoNombre,
+            venta.usuario.primerApellido,
+            venta.usuario.segundoApellido,
+        )
+        return " ".join(nombre for nombre in nombres if nombre)
 
     def obtener_nombre_cliente(self, venta):
         cliente = venta.cliente

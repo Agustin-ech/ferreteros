@@ -7,12 +7,13 @@ import { Package } from "lucide-react";
 const vacio = { codigo: "", nombre: "", tipo: "", unidad: "", compra: "", venta: "", stock: "", stockMinimo: "5", estado: "Activo", descripcion: "" };
 
 export default function RegistrarProducto() {
-  const { productos, tiposProducto, unidadesMedida, agregarProducto } = useBodega();
+  const { productos, tiposProducto, unidadesMedida, agregarProducto, cargando } = useBodega();
   const [f, setF] = useState(vacio);
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [aviso, Aviso] = useAviso();
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const sinCatalogos = !cargando && (!tiposProducto.length || !unidadesMedida.length);
 
   const guardar = async (e) => {
     e.preventDefault();
@@ -20,6 +21,9 @@ export default function RegistrarProducto() {
     if (!codigo || !f.nombre.trim() || !f.tipo || !f.unidad || f.venta === "" || f.compra === "" || f.stock === "")
       return setError("Completa todos los campos obligatorios (*).");
     if (productos.some((p) => p.codigo === codigo)) return setError(`Ya existe un producto con el código ${codigo}.`);
+    if (Number(f.venta) < 0.01 || Number(f.compra) < 0.01) {
+      return setError("Los precios de compra y venta deben ser mayores que cero.");
+    }
     setGuardando(true);
     setError("");
     try {
@@ -48,6 +52,7 @@ export default function RegistrarProducto() {
       <Titulo icono={Package}>Registrar producto</Titulo>
       <div className="card">
         <h2 className="mb-3 font-semibold">Información del producto</h2>
+        {sinCatalogos && <p className="mb-4 text-sm text-red-400">No se pudieron cargar los tipos de producto o las unidades de medida activas. No es posible registrar el producto.</p>}
         <div className="grid gap-4 md:grid-cols-2">
           <Campo label="Código del producto" requerido><input className="input" placeholder="Ej: PRT-001" value={f.codigo} onChange={set("codigo")} /></Campo>
           <Campo label="Nombre del producto" requerido><input className="input" placeholder="Ej: Tornillo 5mm" value={f.nombre} onChange={set("nombre")} /></Campo>

@@ -45,6 +45,8 @@ def app():
 				"idPedidoProveedor" INTEGER,
 				"idAjusteInventario" INTEGER,
 				"cantidad" NUMERIC(12, 3) NOT NULL,
+				"stockAnterior" NUMERIC(12, 3),
+				"stockNuevo" NUMERIC(12, 3),
 				"fecha" DATETIME NOT NULL
 			)
 		'''))
@@ -158,7 +160,7 @@ def test_ajuste_route_persists_reason_stock_and_transaction(
 		headers={"Authorization": f"Bearer {token}"},
 	)
 
-	assert response.status_code == 200
+	assert response.status_code == 200, response.get_json()
 	assert response.json["inventario_actualizado"]["cantidadDisponible"] == float(stock_esperado)
 	ajuste = AjusteInventario.query.one()
 	assert ajuste.idUser == 9
@@ -171,6 +173,152 @@ def test_ajuste_route_persists_reason_stock_and_transaction(
 	assert transaccion.idAjusteInventario == ajuste.idAjusteInventario
 	assert transaccion.idTipoMovimiento == tipo_transaccion
 	assert transaccion.cantidad == Decimal("1.25")
+	assert transaccion.stockAnterior == Decimal("12.50")
+	assert transaccion.stockNuevo == stock_esperado
+
+
+def test_kardex_lista_movimientos_filtrados_y_respeta_sucursal(app):
+	db.session.add_all([
+		Inventario(idProducto=3, idSucursal=2, CantidadDisponible=Decimal("13.50")),
+		TipoMovimiento(idTipoMovimiento=1, nombre="Entrada"),
+		TipoMovimiento(idTipoMovimiento=2, nombre="Salida"),
+		TipoMovimiento(idTipoMovimiento=3, nombre="Ajuste"),
+		Producto(
+			idProducto=3,
+			idTipoProducto=1,
+			idUnidadMedida=1,
+			codigoSKU="KDX-003",
+			nombre="Producto Kardex",
+			precio=Decimal("100"),
+			costoUnitario=Decimal("50"),
+		),
+		AjusteInventario(
+			idAjusteInventario=4,
+			idInventario=1,
+			idSucursal=2,
+			idUser=9,
+			idTipoMovimiento=3,
+			cantidadAjustada=Decimal("1"),
+			stockAnterior=Decimal("12.50"),
+			stockNuevo=Decimal("13.50"),
+			motivo="Conteo inventario",
+			estadoAutorizacion="Autorizado",
+		),
+	])
+	db.session.flush()
+	db.session.add(TransaccionInventario(
+		idTransaccionInventario=1,
+		idInventario=1,
+		idTipoMovimiento=1,
+		idAjusteInventario=4,
+		cantidad=Decimal("1"),
+		stockAnterior=Decimal("12.50"),
+		stockNuevo=Decimal("13.50"),
+	))
+	db.session.commit()
+	with app.app_context():
+		token = create_access_token(identity="9", additional_claims={"rol": "admin"})
+
+	response = app.test_client().get(
+		"/api/inventario/movimientos?sucursal=2&producto=3&tipo=Entrada",
+		headers={"Authorization": f"Bearer {token}"},
+	)
+
+	assert response.status_code == 200, response.get_json()
+	assert response.json["total"] == 1
+	movimiento = response.json["movimientos"][0]
+	assert movimiento["codigoProducto"] == "KDX-003"
+	assert movimiento["tipoMovimiento"] == "Entrada"
+	assert movimiento["stockAnterior"] == 12.5
+	assert movimiento["stockNuevo"] == 13.5
+	assert movimiento["motivo"] == "Conteo inventario"
+
+	with app.app_context():
+		token_bodega = create_access_token(
+			identity="9",
+			additional_claims={"rol": "bodega", "idSucursal": 2},
+		)
+	response_otra_sucursal = app.test_client().get(
+		"/api/inventario/movimientos?sucursal=4",
+		headers={"Authorization": f"Bearer {token_bodega}"},
+	)
+	assert response_otra_sucursal.status_code == 403
+
+
+def test_bodega_no_puede_ajustar_inventario_de_otra_sucursal(app):
+	with app.app_context():
+		token = create_access_token(
+			identity="9",
+			additional_claims={"rol": "bodega", "idSucursal": 2},
+		)
+
+	response = app.test_client().post(
+		"/api/inventario/ajustar",
+		json={
+			"idProducto": 3,
+			"idSucursal": 4,
+			"cantidad": 1,
+			"operacion": "suma",
+			"motivo": "Entrada de inventario",
+		},
+		headers={"Authorization": f"Bearer {token}"},
+	)
+
+	assert response.status_code == 403
+
+
+def test_bodega_puede_ajustar_inventario_de_su_sucursal(app):
+	db.session.add_all([
+		Inventario(idProducto=3, idSucursal=2, CantidadDisponible=Decimal("5")),
+		TipoMovimiento(idTipoMovimiento=1, nombre="Entrada"),
+		TipoMovimiento(idTipoMovimiento=2, nombre="Salida"),
+		TipoMovimiento(idTipoMovimiento=3, nombre="Ajuste"),
+		Producto(
+			idProducto=3,
+			idTipoProducto=1,
+			idUnidadMedida=1,
+			codigoSKU="TEST-BODEGA",
+			nombre="Producto de bodega",
+			precio=Decimal("100"),
+			costoUnitario=Decimal("50"),
+		),
+	])
+	db.session.commit()
+	with app.app_context():
+		token = create_access_token(
+			identity="9",
+			additional_claims={"rol": "bodega", "idSucursal": 2},
+		)
+
+	response = app.test_client().post(
+		"/api/inventario/ajustar",
+		json={
+			"idProducto": 3,
+			"idSucursal": 2,
+			"cantidad": 1,
+			"operacion": "suma",
+			"motivo": "Entrada de inventario",
+		},
+		headers={"Authorization": f"Bearer {token}"},
+	)
+
+	assert response.status_code == 200
+	assert response.json["inventario_actualizado"]["cantidadDisponible"] == 6
+
+
+def test_bodega_no_puede_consultar_inventario_de_otra_sucursal(app):
+	with app.app_context():
+		token = create_access_token(
+			identity="9",
+			additional_claims={"rol": "bodega", "idSucursal": 2},
+		)
+
+	response = app.test_client().get(
+		"/api/inventario?sucursal=4",
+		headers={"Authorization": f"Bearer {token}"},
+	)
+
+	assert response.status_code == 403
 
 
 def test_ajuste_route_allows_bodega_role(app):

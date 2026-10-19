@@ -2,7 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import api from "../api/client";
 import { errorMessage } from "../api/client";
 
-const hoy = () => new Date().toISOString().slice(0, 10);
+// Fecha local (no UTC): con toISOString() después de las 7 p. m. en
+// Colombia ya saldría el día siguiente.
+const hoy = () => {
+  const fecha = new Date();
+  const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+  const dia = String(fecha.getDate()).padStart(2, "0");
+  return `${fecha.getFullYear()}-${mes}-${dia}`;
+};
 
 const inicioConsultaDanados = () => {
   const fecha = new Date();
@@ -193,7 +200,10 @@ export function BodegaProvider({ children }) {
       motivo: motivo.trim(),
     });
 
-    const stockActual = numero(data?.inventario_actualizado?.cantidadDisponible, producto.stock + delta);
+    const stockActual = Number(data.inventario_actualizado?.cantidadDisponible);
+    if (!Number.isFinite(stockActual)) {
+      throw new Error("El backend no devolvió la cantidad de inventario actualizada.");
+    }
     setProductos((ps) =>
       ps.map((p) => (p.idProducto === producto.idProducto ? { ...p, stock: stockActual } : p))
     );
@@ -205,6 +215,7 @@ export function BodegaProvider({ children }) {
     productos,
     tiposProducto,
     unidadesMedida,
+    idSucursal,
     nombreSucursal,
     danados,
     danadosTotal,
@@ -223,9 +234,18 @@ export function BodegaProvider({ children }) {
     error,
     recargar: cargarDatos,
     agregarProducto: async (p) => {
+      const idTipoProducto = Number(p.idTipoProducto);
+      const idUnidadMedida = Number(p.idUnidadMedida);
+      if (!tiposProducto.some((tipo) => tipo.idTipoProducto === idTipoProducto)) {
+        throw new Error("Selecciona un tipo de producto vigente.");
+      }
+      if (!unidadesMedida.some((unidad) => unidad.idUnidadMedida === idUnidadMedida)) {
+        throw new Error("Selecciona una unidad de medida vigente.");
+      }
+
       const payload = {
-        idTipoProducto: Number(p.idTipoProducto),
-        idUnidadMedida: Number(p.idUnidadMedida),
+        idTipoProducto,
+        idUnidadMedida,
         codigoSKU: String(p.codigo || p.codigoSKU || "").trim(),
         nombre: String(p.nombre || "").trim(),
         descripcion: p.descripcion || null,
@@ -272,6 +292,14 @@ export function BodegaProvider({ children }) {
       const { data } = await api.put(`/api/productos/${producto.idProducto}`, payload);
       const actualizado = normalizarProducto(data, producto.stock, tiposProducto, unidadesMedida);
       setProductos((ps) => ps.map((p) => (p.idProducto === producto.idProducto ? actualizado : p)));
+      const stockNuevo = cambios.stock === undefined ? producto.stock : Number(cambios.stock);
+      if (!Number.isFinite(stockNuevo) || stockNuevo < 0) {
+        throw new Error("El stock debe ser un número válido mayor o igual a cero.");
+      }
+      if (stockNuevo !== producto.stock) {
+        const respuesta = await actualizarStock(codigo, stockNuevo - producto.stock, cambios.motivo, actualizado);
+        return { ...actualizado, stock: Number(respuesta.inventario_actualizado.cantidadDisponible) };
+      }
       return actualizado;
     },
     eliminarProducto: async (codigo) => {
@@ -284,7 +312,7 @@ export function BodegaProvider({ children }) {
     },
     fijarStock: async (codigo, stock, motivo) => {
       const producto = productos.find((p) => p.codigo === codigo);
-      if (!producto) return null;
+      if (!producto) throw new Error("No se encontró el producto para ajustar su inventario.");
       const actual = numero(producto.stock, 0);
       const nuevo = Math.max(0, numero(stock, 0));
       if (nuevo === actual) return null;

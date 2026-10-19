@@ -23,17 +23,50 @@ export default function ConsultarProductos() {
   const visibles = filtrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
 
   const buscar = () => { setBusca(q); setPagina(1); };
-  const abrir = (p, edit) => { setSel(p); setEditando(edit); setBorrador({ stock: p.stock, venta: p.venta, compra: p.compra, estado: p.estado }); };
+
+const abrir = (p, edit) => {
+    setSel(p);
+    setEditando(edit);
+    setError("");
+    setBorrador({ 
+      stock: p.stock, 
+      venta: p.venta, 
+      compra: p.compra, 
+      estado: p.estado, 
+      motivo: "" 
+    });
+  };
+
   const guardar = async () => {
     setError("");
+
+    // Validaciones de precios
+    if (Number(borrador.venta) < 0.01 || Number(borrador.compra) < 0.01) {
+      setError("Los precios de compra y venta deben ser mayores que cero.");
+      return;
+    }
+
+    // Validación de motivo si el stock cambió
+    if (Number(borrador.stock) !== sel.stock && !borrador.motivo.trim()) {
+      setError("Indica el motivo requerido para ajustar el stock.");
+      return;
+    }
+
     try {
-      await actualizarProducto(sel.codigo, { venta: Number(borrador.venta), compra: Number(borrador.compra), estado: borrador.estado });
+      await actualizarProducto(sel.codigo, {
+        stock: Number(borrador.stock),
+        venta: Number(borrador.venta),
+        compra: Number(borrador.compra),
+        estado: borrador.estado,
+        motivo: borrador.motivo,
+      });
       setSel(null);
       aviso("Producto actualizado");
     } catch (err) {
       setError(errorMessage(err, "No se pudo actualizar el producto."));
     }
   };
+
   const borrar = (p) =>
     pedirConfirmacion(
       { titulo: "Desactivar producto", mensaje: `¿Seguro que quieres desactivar "${p.nombre}" (${p.codigo})? El producto dejará de estar disponible, pero se conservará su inventario e historial.` },
@@ -83,13 +116,49 @@ export default function ConsultarProductos() {
         <Modal titulo={`${sel.codigo} · ${sel.nombre}`} onClose={() => setSel(null)}>
           {editando ? (
             <div className="space-y-3 text-sm">
-              {[["Precio de venta", "venta"], ["Precio de compra", "compra"]].map(([l, k]) => (
-                <label key={k} className="block">{l}<input type="number" min="0.01" step="0.01" className="input mt-1" value={borrador[k]} onChange={(e) => setBorrador({ ...borrador, [k]: e.target.value })} /></label>
+
+{/* Campos numéricos: Stock, Precio de venta, Precio de compra */}
+              {[["Stock", "stock"], ["Precio de venta", "venta"], ["Precio de compra", "compra"]].map(([l, k]) => (
+                <label key={k} className="block">
+                  {l}
+                  <input 
+                    type="number" 
+                    min={k === "stock" ? "0" : "0.01"} 
+                    step="0.01" 
+                    className="input mt-1" 
+                    value={borrador[k]} 
+                    onChange={(e) => setBorrador({ ...borrador, [k]: e.target.value })} 
+                  />
+                </label>
               ))}
-              <label className="block">Estado
-                <select className="input mt-1" value={borrador.estado} onChange={(e) => setBorrador({ ...borrador, estado: e.target.value })}><option>Activo</option><option>Inactivo</option></select>
+
+              {/* Selector de Estado */}
+              <label className="block">
+                Estado
+                <select 
+                  className="input mt-1" 
+                  value={borrador.estado} 
+                  onChange={(e) => setBorrador({ ...borrador, estado: e.target.value })}
+                >
+                  <option>Activo</option>
+                  <option>Inactivo</option>
+                </select>
               </label>
-              {error && <p role="alert" className="text-red-400">{error}</p>}
+
+              {/* Motivo condicional (solo si cambia el stock) */}
+              {Number(borrador.stock) !== sel.stock && (
+                <label className="block">
+                  Motivo del ajuste de stock
+                  <textarea 
+                    className="input mt-1" 
+                    value={borrador.motivo} 
+                    onChange={(e) => setBorrador({ ...borrador, motivo: e.target.value })} 
+                  />
+                </label>
+              )}
+
+              {/* Mensaje de error accesible */}
+              {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
               <div className="flex justify-end gap-2"><button className="btn-ghost" onClick={() => setSel(null)}>Cancelar</button><button className="btn-primary" onClick={guardar}>Guardar cambios</button></div>
             </div>
           ) : (

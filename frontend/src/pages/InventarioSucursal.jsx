@@ -67,8 +67,8 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
       inventario.map((item) => [item.idProducto, Number(item.cantidadDisponible || 0)])
     )
 
-    return productos.map((producto) => {
-      const stock = stockPorProducto[producto.idProducto] || 0
+    return productos.filter((producto) => Object.hasOwn(stockPorProducto, producto.idProducto)).map((producto) => {
+      const stock = stockPorProducto[producto.idProducto]
       return {
         id: producto.idProducto,
         codigo: producto.codigoSKU,

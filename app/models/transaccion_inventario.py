@@ -14,6 +14,8 @@ class TransaccionInventario(db.Model):
     idAjusteInventario = db.Column(db.Integer, db.ForeignKey("AjusteInventario.idAjusteInventario"), nullable=True)
 
     cantidad = db.Column(db.Numeric(12, 3), nullable=False)
+    stockAnterior = db.Column(db.Numeric(12, 3), nullable=True)
+    stockNuevo = db.Column(db.Numeric(12, 3), nullable=True)
     fecha = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -28,6 +30,11 @@ class TransaccionInventario(db.Model):
     ajuste = db.relationship('AjusteInventario')
 
     __table_args__ = (
+        db.Index(
+            "ix_transaccion_inventario_inventario_fecha",
+            "idInventario",
+            "fecha",
+        ),
         db.CheckConstraint(
             db.text(
                 '("idVenta" IS NOT NULL)::int + ("idDevolucion" IS NOT NULL)::int + '

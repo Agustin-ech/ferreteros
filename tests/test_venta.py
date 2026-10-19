@@ -1,15 +1,18 @@
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import text
 
 from app import create_app
 from app.extensions import db
+from app.models.cliente import Cliente
 from app.models.detalle_venta import DetalleVenta
 from app.models.factura import Factura
 from app.models.inventario import Inventario
-from app.models.cliente import Cliente
 from app.models.metodo_pago import MetodoPago
 from app.models.producto import Producto
+from app.models.tipo_movimiento import TipoMovimiento
+from app.models.transaccion_inventario import TransaccionInventario
 from app.models.tipo_devolucion import TipoDevolucion
 from app.models.tipo_documento import TipoDeDocumento
 from app.models.tipo_usuario import TipoUsuario
@@ -44,9 +47,25 @@ def app():
 		Venta.__table__,
 		DetalleVenta.__table__,
 		Factura.__table__,
+		TipoMovimiento.__table__,
 	]
 	with application.app_context():
 		db.metadata.create_all(bind=db.engine, tables=tables)
+		db.session.execute(text('''
+			CREATE TABLE "TransaccionInventario" (
+				"idTransaccionInventario" INTEGER PRIMARY KEY,
+				"idInventario" INTEGER NOT NULL,
+				"idTipoMovimiento" INTEGER NOT NULL,
+				"idVenta" INTEGER,
+				"idDevolucion" INTEGER,
+				"idPedidoProveedor" INTEGER,
+				"idAjusteInventario" INTEGER,
+				"cantidad" NUMERIC(12, 3) NOT NULL,
+				"stockAnterior" NUMERIC(12, 3),
+				"stockNuevo" NUMERIC(12, 3),
+				"fecha" DATETIME NOT NULL
+			)
+		'''))
 		db.session.add_all([
 			Producto(
 				idProducto=1,
@@ -65,6 +84,8 @@ def app():
 			TipoVenta(idTipoVenta=1, nombre="Mostrador"),
 			MetodoPago(idMetodoPago=1, nombre="Efectivo"),
 			MetodoPago(idMetodoPago=2, nombre="Transferencia"),
+			TipoMovimiento(idTipoMovimiento=1, nombre="Entrada"),
+			TipoMovimiento(idTipoMovimiento=2, nombre="Salida"),
 			TipoDevolucion(idTipoDevolucion=1, nombre="Cambio"),
 			TipoDeDocumento(idTipoDocumento=1, Acronimo="CC", nombre="Cédula"),
 			TipoUsuario(idTipoUsuario=1, nombre="vendedor"),
@@ -104,6 +125,7 @@ def app():
 		db.session.commit()
 		yield application
 		db.session.remove()
+		db.session.execute(text('DROP TABLE "TransaccionInventario"'))
 		db.metadata.drop_all(bind=db.engine, tables=tables)
 
 
@@ -140,7 +162,17 @@ def test_registrar_venta_persiste_modelos_y_descuenta_stock(app):
 		assert venta.detalles[0].descuento == Decimal("0.00")
 		assert venta.factura.valorTotal == Decimal("14.00")
 		assert db.session.get(Inventario, 1).CantidadDisponible == Decimal("8.50")
-		assert venta_output_schema.dump(venta)["detalles"][0]["nombreProducto"] == "Taladro"
+		movimiento = db.session.query(TransaccionInventario).one()
+		assert movimiento.idVenta == venta.idVenta
+		assert movimiento.idTipoMovimiento == 2
+		assert movimiento.cantidad == Decimal("1.50")
+		assert movimiento.stockAnterior == Decimal("10.00")
+		assert movimiento.stockNuevo == Decimal("8.50")
+		respuesta = venta_output_schema.dump(venta)
+		assert respuesta["detalles"][0]["nombreProducto"] == "Taladro"
+		assert respuesta["nombreVendedor"] == "Vendedor Prueba"
+		assert respuesta["activo"] is True
+		assert respuesta["factura"]["activo"] is True
 
 
 def test_vendedor_no_puede_vender_en_otra_sucursal(app):
@@ -197,17 +229,25 @@ def test_endpoints_venta_post_lista_detalle_y_factura(app):
 	assert respuesta.status_code == 201
 	id_venta = respuesta.json["data"]["idVenta"]
 	assert respuesta.json["data"]["factura"]["total"] == 14.0
+	assert respuesta.json["data"]["nombreVendedor"] == "Vendedor Prueba"
+	assert respuesta.json["data"]["nombreCliente"] == "Ana Prueba"
 
 	lista = client.get("/api/ventas?pagina=1&por_pagina=10", headers=headers)
 	detalle = client.get(f"/api/ventas/{id_venta}", headers=headers)
 	factura = client.get(f"/api/ventas/{id_venta}/factura", headers=headers)
+	usuarios = client.get("/api/usuarios/nombres", headers=headers)
+	cliente_respuesta = client.get("/api/clientes/1", headers=headers)
+
+	assert lista.status_code == 200
+	assert lista.json["paginacion"]["total"] == 1
+	assert lista.json["data"][0]["activo"] is True
+	assert lista.json["data"][0]["nombreVendedor"] == "Vendedor Prueba"
+	assert lista.json["data"][0]["nombreCliente"] == "Ana Prueba"
 	busqueda_factura = client.get(
 		f"/api/ventas?factura={factura.json['numeroFactura']}",
 		headers=headers,
 	)
 
-	assert lista.status_code == 200
-	assert lista.json["paginacion"]["total"] == 1
 	assert lista.json["data"][0]["clienteNombre"] == "Ana Prueba"
 	assert busqueda_factura.status_code == 200
 	assert busqueda_factura.json["paginacion"]["total"] == 1
@@ -216,6 +256,15 @@ def test_endpoints_venta_post_lista_detalle_y_factura(app):
 	assert detalle.json["idVenta"] == id_venta
 	assert factura.status_code == 200
 	assert factura.json["total"] == 14.0
+	assert factura.json["activo"] is True
+	assert cliente_respuesta.status_code == 200
+	assert cliente_respuesta.json["primerNombre"] == "Ana"
+	assert cliente_respuesta.json["primerApellido"] == "Prueba"
+	assert usuarios.status_code == 200
+	assert usuarios.json["data"][0] == {
+		"idUsuario": 7,
+		"nombre": "Vendedor Prueba",
+	}
 	assert factura.json["cliente"]["numeroDocumento"] == "123"
 	assert factura.json["sucursal"]["nombre"] == "Sucursal Prueba"
 	assert factura.json["vendedor"]["nombre"] == "Vendedor Prueba"

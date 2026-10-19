@@ -190,8 +190,10 @@ Rutas principales:
 
 - `GET /api/inventario`
 - `POST /api/inventario/ajustar`
+- `GET /api/inventario/movimientos`
 
 Se consulta stock disponible por sucursal y se puede ajustar con operaciones de suma o resta.
+El Kardex permite filtrar movimientos por sucursal, producto, tipo (`Entrada` o `Salida`) y período (`desde`/`hasta`, formato `YYYY-MM-DD`), con paginación (`pagina`, `por_pagina`, máximo 100). Ventas, devoluciones de productos aptos y ajustes registran automáticamente la cantidad y el saldo antes/después. Bodega solo puede consultar los movimientos de su sucursal. Para movimientos históricos migrados se conservan fecha y cantidad; el saldo anterior/nuevo queda vacío cuando no puede reconstruirse con certeza.
 
 ### 6.3 Ventas
 
@@ -211,6 +213,19 @@ Hay blueprints y rutas para estos módulos, pero su uso real depende de integrac
 ### 6.5 Reportes
 
 El backend expone estructura de reportes y el frontend tiene pantallas para reportes, aunque aún debe alinearse con los contratos definitivos y datos reales.
+
+### 6.6 Empleados
+
+El administrador puede consultar empleados y los catálogos activos de roles, tipos de documento y sucursales. También puede crear cuentas con una contraseña temporal de al menos 12 caracteres, editar sus datos, reasignar sucursales y activar o desactivar cuentas. La contraseña se almacena como hash y no se devuelve en las respuestas; comunícala al empleado por un canal seguro.
+
+Rutas protegidas para administradores:
+
+- `GET /usuarios`
+- `GET /usuarios/catalogos`
+- `POST /usuarios`
+- `PATCH /usuarios/<id>`
+
+Los usuarios que no son administradores requieren una sucursal. No se permite desactivar ni cambiar el rol de la propia cuenta ni dejar el sistema sin un administrador activo. La eliminación es lógica para conservar las referencias históricas. Asistencia, nómina y configuración de permisos por función siguen pendientes.
 
 ---
 

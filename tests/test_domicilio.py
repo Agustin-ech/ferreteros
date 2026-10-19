@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import text
 from flask_jwt_extended import create_access_token
 
 from app import create_app
@@ -13,6 +14,7 @@ from app.models.inventario import Inventario
 from app.models.metodo_pago import MetodoPago
 from app.models.producto import Producto
 from app.models.sucursal import Sucursal
+from app.models.tipo_movimiento import TipoMovimiento
 from app.models.tipo_venta import TipoVenta
 from app.models.venta import Venta
 
@@ -29,10 +31,25 @@ def app():
 	tables = [
 			Cliente.__table__, Sucursal.__table__, Producto.__table__, Inventario.__table__,
 			TipoVenta.__table__, MetodoPago.__table__, Venta.__table__, DetalleVenta.__table__,
-			Factura.__table__, Entrega.__table__,
+			Factura.__table__, Entrega.__table__, TipoMovimiento.__table__,
 	]
 	with application.app_context():
 		db.metadata.create_all(bind=db.engine, tables=tables)
+		db.session.execute(text('''
+			CREATE TABLE "TransaccionInventario" (
+				"idTransaccionInventario" INTEGER PRIMARY KEY,
+				"idInventario" INTEGER NOT NULL,
+				"idTipoMovimiento" INTEGER NOT NULL,
+				"idVenta" INTEGER,
+				"idDevolucion" INTEGER,
+				"idPedidoProveedor" INTEGER,
+				"idAjusteInventario" INTEGER,
+				"cantidad" NUMERIC(12, 3) NOT NULL,
+				"stockAnterior" NUMERIC(12, 3),
+				"stockNuevo" NUMERIC(12, 3),
+				"fecha" DATETIME NOT NULL
+			)
+		'''))
 		db.session.add_all([
 			Cliente(
 				idCliente=1,
@@ -78,10 +95,13 @@ def app():
 			),
 			TipoVenta(idTipoVenta=1, nombre="Domicilio"),
 			MetodoPago(idMetodoPago=1, nombre="Efectivo"),
+			TipoMovimiento(idTipoMovimiento=1, nombre="Entrada"),
+			TipoMovimiento(idTipoMovimiento=2, nombre="Salida"),
 		])
 		db.session.commit()
 		yield application
 		db.session.remove()
+		db.session.execute(text('DROP TABLE "TransaccionInventario"'))
 		db.metadata.drop_all(bind=db.engine, tables=tables)
 
 

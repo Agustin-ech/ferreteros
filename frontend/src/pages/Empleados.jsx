@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Users, Eye, Pencil, Plus, ChevronLeft, ChevronRight } from 'lucide-react'
 import MenuAcciones from '../components/MenuAcciones'
+import { errorMessage } from '../api/client'
 import DetalleEmpleado from './DetalleEmpleado'
 
 const estadoStyles = {
@@ -26,6 +27,21 @@ export default function Empleados({
   const [pagina, setPagina] = useState(1)
   const [seleccionado, setSeleccionado] = useState(null)
   const [edicionInicial, setEdicionInicial] = useState(false)
+  const [errorAccion, setErrorAccion] = useState('')
+  const [procesando, setProcesando] = useState(null)
+
+  async function cambiarEstado(empleado) {
+    setErrorAccion('')
+    setProcesando(empleado.id)
+    try {
+      if (empleado.estado === 'Activo') await onEliminarEmpleado?.(empleado.id)
+      else await onEditarEmpleado?.(empleado.id, { activo: true })
+    } catch (error) {
+      setErrorAccion(errorMessage(error, 'No se pudo cambiar el estado del empleado.'))
+    } finally {
+      setProcesando(null)
+    }
+  }
 
   const roles = useMemo(() => ['Todos', ...new Set(empleados.map((e) => e.cargo))], [empleados])
 
@@ -61,7 +77,11 @@ export default function Empleados({
         sucursales={catalogosPersonal.sucursales || []}
         roles={catalogosPersonal.roles || []}
         onVolver={() => setSeleccionado(null)}
-        onGuardar={(datos) => onEditarEmpleado?.(seleccionado.id, datos)}
+        onGuardar={async (payload) => {
+          const actualizado = await onEditarEmpleado?.(seleccionado.id, payload)
+          if (actualizado) setSeleccionado(actualizado)
+          return actualizado
+        }}
       />
     )
   }
@@ -111,6 +131,8 @@ export default function Empleados({
         </select>
       </div>
 
+      {errorAccion && <p role="alert" className="text-sm text-red-400">{errorAccion}</p>}
+
       <div className="bg-panel-card border border-panel-border rounded-xl overflow-x-auto scroll-thin">
         <table className="w-full text-sm min-w-[720px]">
           <thead>
@@ -131,7 +153,7 @@ export default function Empleados({
                 <td className="py-3 pr-2 text-gray-200 font-medium">{e.nombre}</td>
                 <td className="py-3 pr-2 text-gray-300">{e.cargo}</td>
                 <td className="py-3 pr-2 text-gray-400 whitespace-nowrap">{e.sucursal}</td>
-                <td className="py-3 pr-2 text-gray-300 whitespace-nowrap">{e.telefono}</td>
+                <td className="py-3 pr-2 text-gray-300 whitespace-nowrap">{e.telefono || '-'}</td>
                 <td className="py-3 pr-2">
                   <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${estadoStyles[e.estado]}`}>{e.estado}</span>
                 </td>
@@ -142,14 +164,12 @@ export default function Empleados({
                     <MenuAcciones
                       acciones={[
                         {
-                          label: e.estado === 'Activo' ? 'Desactivar' : 'Activar',
-                          onClick: () => onEditarEmpleado?.(e.id, { estado: e.estado === 'Activo' ? 'Inactivo' : 'Activo' }),
+                          label: procesando === e.id
+                            ? 'Procesando...'
+                            : e.estado === 'Activo' ? 'Desactivar empleado' : 'Activar empleado',
+                          destructivo: e.estado === 'Activo',
+                          onClick: () => { if (!procesando) cambiarEstado(e) },
                         },
-                        ...(e.estado === 'Activo' ? [{
-                            label: 'Desactivar empleado',
-                            destructivo: true,
-                            onClick: () => onEliminarEmpleado?.(e.id),
-                          }] : []),
                       ]}
                     />
                   </div>

@@ -1,7 +1,6 @@
 import { Boxes } from 'lucide-react'
-import { sucursales as sucursalesEjemplo } from '../data/mockData'
 
-export default function InventoryBySucursal({ sucursales = sucursalesEjemplo }) {
+export default function InventoryBySucursal({ sucursales = [] }) {
   return (
     <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -25,6 +24,9 @@ export default function InventoryBySucursal({ sucursales = sucursalesEjemplo }) 
             </div>
           </div>
         ))}
+        {sucursales.length === 0 && (
+          <p className="col-span-2 text-xs text-gray-500">No hay sucursales o inventario disponible.</p>
+        )}
       </div>
     </div>
   )

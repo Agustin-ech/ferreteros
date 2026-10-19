@@ -195,6 +195,8 @@ class InventarioService:
                 idTipoMovimiento=tipo_transaccion.idTipoMovimiento,
                 idAjusteInventario=ajuste.idAjusteInventario,
                 cantidad=cantidad,
+                stockAnterior=stock_anterior,
+                stockNuevo=Decimal(str(registro.CantidadDisponible)),
             ))
 
         try:

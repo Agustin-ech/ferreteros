@@ -14,7 +14,7 @@ export default function Inventario({ onNavigate }) {
     <div className="space-y-4">
       <Titulo icono={BarChart3}>Existencias en inventario</Titulo>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat icono={Package} titulo="Total de productos" valor={total.toLocaleString("es-CO")} />
+        <Stat icono={Package} titulo="Total de productos" valor={productos.length.toLocaleString("es-CO")} nota={`${total.toLocaleString("es-CO")} unidades en inventario`} />
         <Stat icono={Layers} titulo="Categorías" valor={porCategoria.length} />
         <Stat icono={TrendingDown} titulo="Stock bajo" valor={bajos.length} rojo />
         <Stat icono={Wallet} titulo="Valor total de inventario" valor={dinero(valor)} />

@@ -9,6 +9,7 @@ import AjusteInventario from "./pages/AjusteInventario.jsx";
 import RegistrarDanado from "./pages/RegistrarDanado.jsx";
 import ConsultarDanados from "./pages/ConsultarDanados.jsx";
 import MercanciaRecibida from "./pages/MercanciaRecibida.jsx";
+import Kardex from "./pages/Kardex.jsx";
 
 const paginas = {
   inicio: Inicio,
@@ -16,6 +17,7 @@ const paginas = {
   "registrar-producto": RegistrarProducto,
   "consultar-productos": ConsultarProductos,
   inventario: Inventario,
+  kardex: Kardex,
   ajuste: AjusteInventario,
   "registrar-danado": RegistrarDanado,
   "consultar-danados": ConsultarDanados,

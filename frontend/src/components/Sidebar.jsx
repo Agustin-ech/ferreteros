@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import {
-  Home, Package, FileText, DollarSign, BarChart2, Users, ChevronDown,
+  Home, Package, FileText, DollarSign, BarChart2, Users, Truck, ChevronDown,
 } from 'lucide-react'
-import { menuItems } from '../data/mockData'
+import { menuItems } from '../data/menu'
 import logo from '../assets/logo.png'
 
-const iconMap = { Home, Package, FileText, DollarSign, BarChart2, Users }
+const iconMap = { Home, Package, FileText, DollarSign, BarChart2, Users, Truck }
 
 // Un ítem de submenú puede ser:
 // - un texto simple (hoja sin página propia todavía)
@@ -82,13 +82,14 @@ function SubmenuNode({ item, activePage, onNavigate }) {
 
 export default function Sidebar({ activePage, onNavigate, sucursales = [] }) {
   const [openMenu, setOpenMenu] = useState('Inventario')
-  const items = menuItems.map((item) => item.label !== 'Inventario' ? item : ({
+  const paginasPorSucursal = { Inventario: 'inventario-sucursal', Facturas: 'facturas-sucursal' }
+  const items = menuItems.map((item) => !paginasPorSucursal[item.label] ? item : ({
     ...item,
     children: [
-      { label: 'Inventario global', page: 'inventario-global' },
+      ...item.children,
       ...sucursales.map((sucursal) => ({
         label: sucursal.nombreSucursal,
-        page: `inventario-sucursal-${sucursal.idSucursal}`,
+        page: `${paginasPorSucursal[item.label]}-${sucursal.idSucursal}`,
       })),
     ],
   }))

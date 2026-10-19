@@ -64,6 +64,8 @@ def crear_app(config_extra: dict | None = None, uri: str = "sqlite://") -> Flask
     from app.models.alerta_inventario import AlertaInventario
     from app.models.detalle_devolucion import DetalleDevolucion
     from app.models.devoluciones import Devolucion
+    from app.models.detalle_devolucion import DetalleDevolucion
+    from app.models.detalle_orden_proveedor import DetalleOrdenProveedor
     from app.models.detalle_venta import DetalleVenta
     from app.models.domicilio import Domicilio
     from app.models.entrega import Entrega
@@ -77,6 +79,8 @@ def crear_app(config_extra: dict | None = None, uri: str = "sqlite://") -> Flask
     from app.models.mercancia_recibida import MercanciaRecibida
     from app.models.pedido_proveedor import PedidoProveedor
     from app.models.producto import Producto
+    from app.models.pedido_proveedor import PedidoProveedor
+    from app.models.proveedor import Proveedor
     from app.models.reclamos_proveedor import ReclamoProveedor
     from app.models.sucursal import Sucursal
     from app.models.sucursal_usuario import SucursalUsuario
@@ -100,6 +104,7 @@ def crear_app(config_extra: dict | None = None, uri: str = "sqlite://") -> Flask
         "DetalleVenta": DetalleVenta,
         "Factura": Factura,
         "Devolucion": Devolucion,
+        "DetalleDevolucion": DetalleDevolucion,
         "TipoVenta": TipoVenta,
         "MetodoPago": MetodoPago,
         "TipoDeDocumento": TipoDeDocumento,
@@ -113,6 +118,10 @@ def crear_app(config_extra: dict | None = None, uri: str = "sqlite://") -> Flask
         "Funcion": Funcion,
         "SucursalUsuario": SucursalUsuario,
         "TipoUsuarioFuncion": TipoUsuarioFuncion,
+        "DetalleOrdenProveedor": DetalleOrdenProveedor,
+        "EstadoPedidoProveedor": EstadoPedidoProveedor,
+        "PedidoProveedor": PedidoProveedor,
+        "Proveedor": Proveedor,
     })
 
     app.test_client_class = ClienteReportes
@@ -148,8 +157,10 @@ def crear_app_con_datos(uri: str = "sqlite://", config_extra: dict | None = None
             "TipoDeDocumento", "TipoUsuario", "TipoProducto", "UnidadMedida",
             "TipoVenta", "metodo_pago", "tipo_devolucion", "sucursales",
             "usuarios", "SucursalUsuario", "Funcion", "tipo_usuario_funcion",
-            "Cliente", "Producto", "Venta", "detalle_venta", "Factura",
-            "devolucion", "Inventario",
+            "Cliente", "Producto", "Venta", "detalle_venta",
+            "Factura", "devolucion", "DetalleDevolucion", "Inventario",
+            "Proveedor", "estado_pedido_proveedor", "pedido_proveedor",
+            "detalle_orden_proveedor",
         )
         db.metadata.create_all(
             bind=db.engine,
@@ -196,6 +207,8 @@ def preparar_mercancia_danada(app: Flask, *, con_datos: bool = False) -> None:
                 "idPedidoProveedor" INTEGER,
                 "idAjusteInventario" INTEGER,
                 "cantidad" NUMERIC(12, 3) NOT NULL,
+                "stockAnterior" NUMERIC(12, 3),
+                "stockNuevo" NUMERIC(12, 3),
                 "fecha" DATETIME NOT NULL
             )
         '''))

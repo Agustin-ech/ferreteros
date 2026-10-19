@@ -2,6 +2,7 @@ from decimal import Decimal
 
 import pytest
 from flask_jwt_extended import create_access_token
+from sqlalchemy import text
 
 from app import create_app
 from app.extensions import db
@@ -12,6 +13,8 @@ from app.models.factura import Factura
 from app.models.inventario import Inventario
 from app.models.producto import Producto
 from app.models.tipo_devolucion import TipoDevolucion
+from app.models.tipo_movimiento import TipoMovimiento
+from app.models.transaccion_inventario import TransaccionInventario
 from app.models.venta import Venta
 
 
@@ -33,9 +36,25 @@ def app():
 		TipoDevolucion.__table__,
 		Devolucion.__table__,
 		DetalleDevolucion.__table__,
+		TipoMovimiento.__table__,
 	]
 	with application.app_context():
 		db.metadata.create_all(bind=db.engine, tables=tables)
+		db.session.execute(text('''
+			CREATE TABLE "TransaccionInventario" (
+				"idTransaccionInventario" INTEGER PRIMARY KEY,
+				"idInventario" INTEGER NOT NULL,
+				"idTipoMovimiento" INTEGER NOT NULL,
+				"idVenta" INTEGER,
+				"idDevolucion" INTEGER,
+				"idPedidoProveedor" INTEGER,
+				"idAjusteInventario" INTEGER,
+				"cantidad" NUMERIC(12, 3) NOT NULL,
+				"stockAnterior" NUMERIC(12, 3),
+				"stockNuevo" NUMERIC(12, 3),
+				"fecha" DATETIME NOT NULL
+			)
+		'''))
 		db.session.add_all([
 			Producto(
 				idProducto=1,
@@ -90,10 +109,13 @@ def app():
 			Factura(idFactura=1, idVenta=1, numeroFactura="FAC-001", valorTotal=Decimal("30.00")),
 			Factura(idFactura=2, idVenta=2, numeroFactura="FAC-002", valorTotal=Decimal("10.00")),
 			TipoDevolucion(idTipoDevolucion=1, nombre="Garantía"),
+			TipoMovimiento(idTipoMovimiento=1, nombre="Entrada"),
+			TipoMovimiento(idTipoMovimiento=2, nombre="Salida"),
 		])
 		db.session.commit()
 		yield application
 		db.session.remove()
+		db.session.execute(text('DROP TABLE "TransaccionInventario"'))
 		db.metadata.drop_all(bind=db.engine, tables=tables)
 
 
@@ -136,6 +158,12 @@ def test_registrar_devolucion_y_reingresar_stock_si_producto_apto(app):
 	with app.app_context():
 		assert db.session.get(Inventario, 1).CantidadDisponible == Decimal("4.00")
 		assert db.session.query(Devolucion).count() == 1
+		movimiento = db.session.query(TransaccionInventario).one()
+		assert movimiento.idDevolucion == respuesta.json["data"]["idDevolucion"]
+		assert movimiento.idTipoMovimiento == 1
+		assert movimiento.cantidad == Decimal("2.000")
+		assert movimiento.stockAnterior == Decimal("2.00")
+		assert movimiento.stockNuevo == Decimal("4.00")
 
 
 def test_producto_no_apto_no_se_reingresa_al_stock(app):
