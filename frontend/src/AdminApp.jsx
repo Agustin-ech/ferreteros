@@ -1,39 +1,41 @@
 // Este archivo es el antiguo App.jsx del panel admin, renombrado a AdminApp.jsx.
 // Único cambio: recibe onLogout y se lo pasa al Header (botón "Cerrar sesión").
 // El nuevo App.jsx decide si mostrar el Login, este panel o el de Bodega.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import Sidebar from './components/Sidebar'
 import Header from './components/Header'
 import ApiState from './components/ApiState'
-import Inicio from './pages/Inicio'
-import InventarioGlobal from './pages/InventarioGlobal'
-import Kardex from './pages/Kardex'
-import InventarioSucursal from './pages/InventarioSucursal'
-import Facturas from './pages/Facturas'
-import TodasLasFacturas from './pages/TodasLasFacturas'
-import FacturasSucursal from './pages/FacturasSucursal'
-import Finanzas from './pages/Finanzas'
-import Ingresos from './pages/Ingresos'
-import Egresos from './pages/Egresos'
-import ResumenFinanciero from './pages/ResumenFinanciero'
-import Reportes from './pages/Reportes'
-import ReporteVentas from './pages/ReporteVentas'
-import ReporteInventario from './pages/ReporteInventario'
-import ReporteFinanciero from './pages/ReporteFinanciero'
-import ReporteSucursal from './pages/ReporteSucursal'
-import ReporteConsolidado from './pages/ReporteConsolidado'
-import ReporteFacturas from './pages/ReporteFacturas'
-import ReporteDevoluciones from './pages/ReporteDevoluciones'
-import ReporteProductos from './pages/ReporteProductos'
-import ReporteMercanciaDanada from './pages/ReporteMercanciaDanada'
-import Empleados from './pages/Empleados'
-import NuevoEmpleado from './pages/NuevoEmpleado'
-import RolesPermisos from './pages/RolesPermisos'
-import PedidosProveedor from './pages/PedidosProveedor'
-import ReporteCompras from './pages/ReporteCompras'
 import api from './api/client'
 import { errorMessage } from './api/client'
 import { listarVentas, normalizarVenta } from './api/ventas'
+
+// Las páginas se descargan al abrirlas por primera vez.
+const Inicio = lazy(() => import('./pages/Inicio'))
+const InventarioGlobal = lazy(() => import('./pages/InventarioGlobal'))
+const Kardex = lazy(() => import('./pages/Kardex'))
+const InventarioSucursal = lazy(() => import('./pages/InventarioSucursal'))
+const Facturas = lazy(() => import('./pages/Facturas'))
+const TodasLasFacturas = lazy(() => import('./pages/TodasLasFacturas'))
+const FacturasSucursal = lazy(() => import('./pages/FacturasSucursal'))
+const Finanzas = lazy(() => import('./pages/Finanzas'))
+const Ingresos = lazy(() => import('./pages/Ingresos'))
+const Egresos = lazy(() => import('./pages/Egresos'))
+const ResumenFinanciero = lazy(() => import('./pages/ResumenFinanciero'))
+const Reportes = lazy(() => import('./pages/Reportes'))
+const ReporteVentas = lazy(() => import('./pages/ReporteVentas'))
+const ReporteInventario = lazy(() => import('./pages/ReporteInventario'))
+const ReporteFinanciero = lazy(() => import('./pages/ReporteFinanciero'))
+const ReporteSucursal = lazy(() => import('./pages/ReporteSucursal'))
+const ReporteConsolidado = lazy(() => import('./pages/ReporteConsolidado'))
+const ReporteFacturas = lazy(() => import('./pages/ReporteFacturas'))
+const ReporteDevoluciones = lazy(() => import('./pages/ReporteDevoluciones'))
+const ReporteProductos = lazy(() => import('./pages/ReporteProductos'))
+const ReporteMercanciaDanada = lazy(() => import('./pages/ReporteMercanciaDanada'))
+const Empleados = lazy(() => import('./pages/Empleados'))
+const NuevoEmpleado = lazy(() => import('./pages/NuevoEmpleado'))
+const RolesPermisos = lazy(() => import('./pages/RolesPermisos'))
+const PedidosProveedor = lazy(() => import('./pages/PedidosProveedor'))
+const ReporteCompras = lazy(() => import('./pages/ReporteCompras'))
 
 const ETIQUETAS_ROL = { admin: 'Administrador', vendedor: 'Vendedor', bodega: 'Bodeguero' }
 
@@ -271,6 +273,7 @@ export default function AdminApp({ onLogout }) {
         <Header onLogout={onLogout} onSelectProduct={abrirProductoDesdeBusqueda} />
 
         <main className="flex-1 p-6 overflow-y-auto">
+          <Suspense fallback={<p role="status" className="text-sm text-gray-400">Cargando...</p>}>
           {['empleados', 'nuevo-empleado', 'roles-permisos'].includes(activePage) && (
             <div className="mb-4">
               <ApiState
@@ -330,6 +333,7 @@ export default function AdminApp({ onLogout }) {
             productoParaBusqueda={activePage === 'inventario-global' ? productoParaBusqueda : null}
             onProductoAbierto={() => setProductoParaBusqueda(null)}
           />}
+          </Suspense>
         </main>
       </div>
     </div>

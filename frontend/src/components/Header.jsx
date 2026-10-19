@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, Bell, MapPin, User, LogOut } from 'lucide-react'
+import { Search, MapPin, User, LogOut } from 'lucide-react'
 import api from '../api/client'
 
 export default function Header({ onLogout, onSelectProduct }) {
@@ -183,8 +183,6 @@ export default function Header({ onLogout, onSelectProduct }) {
         </div>
 
         <button className="relative text-gray-400 hover:text-white transition-colors">
-          <Bell size={18} />
-          <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-brand-yellow" />
         </button>
 
         <div className="flex items-center gap-2">

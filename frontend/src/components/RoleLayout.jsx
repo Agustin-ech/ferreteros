@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  Bell, ChevronDown, ChevronRight, LogOut, MapPin, Menu, Search, User, X,
+  ChevronDown, ChevronRight, LogOut, MapPin, Menu, Search, User, X,
 } from 'lucide-react'
 import logo from '../assets/logo.png'
 
@@ -156,7 +156,6 @@ export default function RoleLayout({
               <MapPin size={15} />
               Local: <span className="font-medium text-gray-200">{localName}</span>
             </div>
-            <Bell size={18} className="hidden text-gray-400 sm:block" />
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-yellow/20 text-brand-yellow">
                 <User size={16} />
