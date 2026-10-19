@@ -7,7 +7,7 @@ import { Package } from "lucide-react";
 const vacio = { codigo: "", nombre: "", tipo: "", unidad: "", compra: "", venta: "", stock: "", stockMinimo: "5", estado: "Activo", descripcion: "" };
 
 export default function RegistrarProducto() {
-  const { productos, tiposProducto, unidadesMedida, agregarProducto, cargando } = useBodega();
+  const { catalogoProductos: productos, tiposProducto, unidadesMedida, agregarProducto, cargando } = useBodega();
   const [f, setF] = useState(vacio);
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);

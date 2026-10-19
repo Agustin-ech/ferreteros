@@ -72,7 +72,11 @@ const normalizarProducto = (producto, stockDisponible = 0, tipos = [], unidades 
 };
 
 export function BodegaProvider({ children }) {
+  // productos: solo los que tienen inventario en la sucursal de bodega.
+  // catalogoProductos: todo el catálogo, para validar códigos y para recibir
+  // mercancía de un producto que la sucursal aún no maneja.
   const [productos, setProductos] = useState([]);
+  const [catalogoProductos, setCatalogoProductos] = useState([]);
   const [tiposProducto, setTiposProducto] = useState([]);
   const [unidadesMedida, setUnidadesMedida] = useState([]);
   const [idSucursal, setIdSucursal] = useState(null);
@@ -158,7 +162,7 @@ export function BodegaProvider({ children }) {
       const tipos = catalogosRes.data?.tipos || [];
       const unidades = catalogosRes.data?.unidades || [];
       const inventarioPorProducto = {};
-      for (const item of inventarioRes.data || []) {
+      for (const item of (inventarioRes.data || []).filter((item) => item.activo !== false)) {
         inventarioPorProducto[item.idProducto] =
           (inventarioPorProducto[item.idProducto] || 0) + numero(item.cantidadDisponible, 0);
       }
@@ -166,9 +170,11 @@ export function BodegaProvider({ children }) {
       setTiposProducto(tipos);
       setUnidadesMedida(unidades);
       setNombreSucursal(sucursalRes?.data?.nombreSucursal || "");
-      setProductos((productosRes.data || []).map((producto) =>
+      const catalogo = (productosRes.data || []).map((producto) =>
         normalizarProducto(producto, inventarioPorProducto[producto.idProducto] ?? 0, tipos, unidades)
-      ));
+      );
+      setCatalogoProductos(catalogo);
+      setProductos(catalogo.filter((producto) => producto.idProducto in inventarioPorProducto));
       await cargarDanados(1, "", sucursal);
       await cargarTiposDanio();
       await cargarRecibidos();
@@ -213,6 +219,7 @@ export function BodegaProvider({ children }) {
 
   const apiBodega = {
     productos,
+    catalogoProductos,
     tiposProducto,
     unidadesMedida,
     idSucursal,
@@ -258,6 +265,7 @@ export function BodegaProvider({ children }) {
       const { data } = await api.post("/api/productos", payload);
       const productoNormalizado = normalizarProducto(data, 0, tiposProducto, unidadesMedida);
       setProductos((ps) => [productoNormalizado, ...ps]);
+      setCatalogoProductos((ps) => [productoNormalizado, ...ps]);
       const stockInicial = numero(p.stock, 0);
       if (stockInicial > 0) {
         try {
@@ -366,7 +374,7 @@ export function BodegaProvider({ children }) {
       return data;
     },
     agregarRecibido: async (r) => {
-      const producto = productos.find((p) => p.codigo === r.codigo);
+      const producto = catalogoProductos.find((p) => p.codigo === r.codigo);
       if (!producto) throw new Error("No se encontró el producto seleccionado.");
       if (!idSucursal) throw new Error("No hay una sucursal asignada para registrar el ingreso.");
       const { data } = await api.post("/api/v1/mercancia-recibida", {
@@ -380,14 +388,17 @@ export function BodegaProvider({ children }) {
 
       setRecibidos((rs) => [normalizarRecibido(data), ...rs]);
       setRecibidosError("");
-      const stockActual = numero(data?.existenciasRestantes, producto.stock + numero(r.cantidad, 0));
-      setProductos((ps) =>
-        ps.map((p) => (p.idProducto === producto.idProducto ? { ...p, stock: stockActual } : p))
-      );
+      const actual = productos.find((p) => p.idProducto === producto.idProducto);
+      const stockActual = numero(data?.existenciasRestantes, (actual?.stock ?? 0) + numero(r.cantidad, 0));
+      // Si la sucursal no manejaba el producto, a partir de este ingreso queda asociado.
+      setProductos((ps) => (actual
+        ? ps.map((p) => (p.idProducto === producto.idProducto ? { ...p, stock: stockActual } : p))
+        : [{ ...producto, stock: stockActual }, ...ps]));
       return data;
     },
     reiniciarDatos: () => {
       setProductos([]);
+      setCatalogoProductos([]);
       setDanados([]);
       setDanadosTotal(0);
       setRecibidos([]);
