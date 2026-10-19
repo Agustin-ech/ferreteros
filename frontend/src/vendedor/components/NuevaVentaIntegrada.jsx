@@ -4,6 +4,7 @@ import {
   buscarClientePorDocumento,
   buscarProductos,
   listarCatalogosVenta,
+  listarInventarioSucursal,
   obtenerFactura,
   registrarCliente,
   registrarDomicilio,
@@ -42,6 +43,27 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
   const [resultado, setResultado] = useState(null)
+  // idProducto -> cantidad disponible en la sucursal del vendedor.
+  const [existencias, setExistencias] = useState(null)
+  const [versionInventario, setVersionInventario] = useState(0)
+
+  useEffect(() => {
+    let vigente = true
+    if (!idSucursal) return () => { vigente = false }
+    listarInventarioSucursal(idSucursal)
+      .then(({ data }) => {
+        if (!vigente) return
+        setExistencias(new Map(
+          data
+            .filter((item) => item.activo !== false)
+            .map((item) => [item.idProducto, Number(item.cantidadDisponible || 0)]),
+        ))
+      })
+      .catch((err) => {
+        if (vigente) setError(mensajeError(err))
+      })
+    return () => { vigente = false }
+  }, [idSucursal, versionInventario])
 
   useEffect(() => {
     let vigente = true
@@ -71,6 +93,16 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
     return () => { vigente = false }
   }, [consultaProducto])
 
+  // Solo se ofrecen los productos con existencias en la sucursal del vendedor.
+  const productosDisponibles = useMemo(
+    () => (existencias
+      ? productosEncontrados
+        .map((producto) => ({ ...producto, disponible: existencias.get(producto.idProducto) ?? 0 }))
+        .filter((producto) => producto.disponible > 0)
+      : []),
+    [productosEncontrados, existencias],
+  )
+
   const total = useMemo(
     () => carrito.reduce((suma, item) => suma + Number(item.precio) * Number(item.cantidad), 0),
     [carrito],
@@ -85,10 +117,10 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
       const existente = actual.find((item) => item.idProducto === producto.idProducto)
       if (existente) {
         return actual.map((item) => item.idProducto === producto.idProducto
-          ? { ...item, cantidad: Number(item.cantidad) + 1 }
+          ? { ...item, cantidad: Math.min(Number(item.cantidad) + 1, producto.disponible) }
           : item)
       }
-      return [...actual, { ...producto, cantidad: 1 }]
+      return [...actual, { ...producto, cantidad: Math.min(1, producto.disponible) }]
     })
     setConsultaProducto('')
     setProductosEncontrados([])
@@ -185,6 +217,8 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
     setResultado(null)
     if (!idSucursal) return setError('La sesión no tiene una sucursal asignada.')
     if (!carrito.length) return setError('Agrega al menos un producto.')
+    const sinStock = carrito.find((item) => Number(item.cantidad) > (existencias?.get(item.idProducto) ?? 0))
+    if (sinStock) return setError(`Solo hay ${existencias?.get(sinStock.idProducto) ?? 0} unidades de '${sinStock.nombre}' en tu sucursal.`)
     if (!tipoVenta || !metodoPago) return setError('Selecciona el tipo de venta y el método de pago.')
     if (consultaCliente.trim() && !seleccionCliente) return setError('Busca y selecciona el cliente, o completa su registro antes de procesar la venta.')
     if (esDomicilio && !seleccionCliente) return setError('Selecciona un cliente para el domicilio.')
@@ -216,6 +250,7 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
       const factura = idVenta ? (await obtenerFactura(idVenta)).data : venta.factura
       setResultado({ factura, total: venta.total ?? venta.totalVenta, idVenta, domicilio: esDomicilio })
       setCarrito([])
+      setVersionInventario((version) => version + 1)
     } catch (err) {
       setError(mensajeError(err))
     } finally {
@@ -326,16 +361,22 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
         <h3 className="text-sm font-semibold text-gray-200">Productos</h3>
         <div className="relative flex gap-2">
           <input className={campo} value={consultaProducto} onChange={(evento) => setConsultaProducto(evento.target.value)} placeholder="Buscar por código o nombre" />
-          {productosEncontrados.length > 0 && (
+          {productosDisponibles.length > 0 && (
             <ul className="absolute left-0 top-full z-10 mt-1 max-h-56 w-full overflow-auto border border-[#333] bg-[#151515] shadow-lg">
-              {productosEncontrados.map((producto) => (
+              {productosDisponibles.map((producto) => (
                 <li key={producto.idProducto}>
                   <button type="button" onClick={() => agregarProducto(producto)} className="flex w-full justify-between gap-4 px-3 py-2 text-left text-sm text-white hover:bg-[#292929]">
-                    <span>{producto.codigoSKU} · {producto.nombre}</span><span>{moneda.format(producto.precio)}</span>
+                    <span>{producto.codigoSKU} · {producto.nombre}</span>
+                    <span className="flex gap-4 whitespace-nowrap"><span className="text-gray-400">Disp: {producto.disponible}</span>{moneda.format(producto.precio)}</span>
                   </button>
                 </li>
               ))}
             </ul>
+          )}
+          {consultaProducto.trim() && productosEncontrados.length > 0 && existencias && productosDisponibles.length === 0 && (
+            <p className="absolute left-0 top-full z-10 mt-1 w-full border border-[#333] bg-[#151515] px-3 py-2 text-sm text-gray-400">
+              No hay existencias de ese producto en tu sucursal.
+            </p>
           )}
         </div>
         <div className="overflow-x-auto">
@@ -345,7 +386,7 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
               {carrito.map((item) => (
                 <tr key={item.idProducto}>
                   <td className="py-3">{item.codigoSKU}</td><td>{item.nombre}</td>
-                  <td><input aria-label={`Cantidad de ${item.nombre}`} type="number" min="0.01" step="0.01" value={item.cantidad} onChange={(evento) => cambiarCantidad(item.idProducto, evento.target.value)} className="w-24 rounded border border-[#333] bg-[#1f1f1f] px-2 py-1" /></td>
+                  <td><input aria-label={`Cantidad de ${item.nombre}`} type="number" min="0.01" step="0.01" max={existencias?.get(item.idProducto) ?? undefined} value={item.cantidad} onChange={(evento) => cambiarCantidad(item.idProducto, evento.target.value)} className="w-24 rounded border border-[#333] bg-[#1f1f1f] px-2 py-1" /></td>
                   <td>{moneda.format(item.precio)}</td><td>{moneda.format(Number(item.precio) * Number(item.cantidad || 0))}</td>
                   <td><button type="button" title="Quitar producto" onClick={() => setCarrito((actual) => actual.filter((producto) => producto.idProducto !== item.idProducto))} className="p-2 text-gray-400 hover:text-red-400"><FiTrash2 /></button></td>
                 </tr>

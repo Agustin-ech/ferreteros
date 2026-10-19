@@ -5,7 +5,7 @@ import errorMessage from "../../api/errorMessage";
 import { Truck } from "lucide-react";
 
 export default function MercanciaRecibida() {
-  const { productos, recibidos, recibidosCargando, recibidosError, cargarRecibidos, agregarRecibido, hoy } = useBodega();
+  const { catalogoProductos: productos, recibidos, recibidosCargando, recibidosError, cargarRecibidos, agregarRecibido, hoy } = useBodega();
   const vacio = { fecha: hoy(), factura: "", codigo: "", cantidad: "", proveedor: "" };
   const [f, setF] = useState(vacio);
   const [error, setError] = useState("");

@@ -2,6 +2,8 @@ import api from './client'
 
 export const listarCatalogosVenta = () => api.get('/api/catalogos')
 export const buscarProductos = (q) => api.get('/api/productos', { params: { q } })
+// Para el vendedor el backend siempre limita el inventario a su sucursal.
+export const listarInventarioSucursal = (idSucursal) => api.get('/api/inventario', { params: { sucursal: idSucursal } })
 export const buscarClientes = (q) => api.get('/api/clientes', { params: { q, pagina: 1, por_pagina: 10 } })
 export const buscarClientePorDocumento = (documento) => api.get('/api/clientes', { params: { documento, pagina: 1, por_pagina: 1 } })
 export const registrarCliente = (payload) => api.post('/api/clientes', payload)
