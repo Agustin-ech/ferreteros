@@ -13,6 +13,28 @@ import {
 
 const moneda = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 
+const redondear = (valor) => Math.round(valor * 100) / 100
+
+// Misma cuenta que hace el backend al registrar la venta: el descuento del
+// producto se aplica sobre el valor bruto de cada línea.
+function calcularLinea(item) {
+  const bruto = redondear(Number(item.precio) * Number(item.cantidad || 0))
+  const descuento = redondear(bruto * Number(item.descuentoPorcentaje || 0) / 100)
+  return { bruto, descuento, neto: bruto - descuento }
+}
+
+function PrecioProducto({ producto }) {
+  const porcentaje = Number(producto.descuentoPorcentaje || 0)
+  if (porcentaje <= 0) return <span>{moneda.format(producto.precio)}</span>
+  return (
+    <span className="flex items-center gap-2 whitespace-nowrap">
+      <span className="text-xs text-gray-500 line-through">{moneda.format(producto.precio)}</span>
+      <span className="font-semibold text-emerald-400">{moneda.format(producto.precioConDescuento ?? producto.precio * (1 - porcentaje / 100))}</span>
+      <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-xs font-semibold text-emerald-400">-{porcentaje}%</span>
+    </span>
+  )
+}
+
 function mensajeError(error) {
   return error.response?.data?.mensaje || error.response?.data?.error || 'No se pudo completar la operación.'
 }
@@ -103,8 +125,15 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
     [productosEncontrados, existencias],
   )
 
-  const total = useMemo(
-    () => carrito.reduce((suma, item) => suma + Number(item.precio) * Number(item.cantidad), 0),
+  const resumen = useMemo(
+    () => carrito.reduce((acumulado, item) => {
+      const linea = calcularLinea(item)
+      return {
+        bruto: acumulado.bruto + linea.bruto,
+        descuento: acumulado.descuento + linea.descuento,
+        total: acumulado.total + linea.neto,
+      }
+    }, { bruto: 0, descuento: 0, total: 0 }),
     [carrito],
   )
   const tipoVentaSeleccionado = catalogos.tiposVenta.find(
@@ -367,7 +396,7 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
                 <li key={producto.idProducto}>
                   <button type="button" onClick={() => agregarProducto(producto)} className="flex w-full justify-between gap-4 px-3 py-2 text-left text-sm text-white hover:bg-[#292929]">
                     <span>{producto.codigoSKU} · {producto.nombre}</span>
-                    <span className="flex gap-4 whitespace-nowrap"><span className="text-gray-400">Disp: {producto.disponible}</span>{moneda.format(producto.precio)}</span>
+                    <span className="flex gap-4 whitespace-nowrap"><span className="text-gray-400">Disp: {producto.disponible}</span><PrecioProducto producto={producto} /></span>
                   </button>
                 </li>
               ))}
@@ -381,24 +410,32 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[620px] text-left text-sm">
-            <thead className="border-b border-[#333] text-xs text-gray-400"><tr><th className="py-2">Código</th><th>Producto</th><th>Cantidad</th><th>Precio unit.</th><th>Subtotal</th><th /></tr></thead>
+            <thead className="border-b border-[#333] text-xs text-gray-400"><tr><th className="py-2">Código</th><th>Producto</th><th>Cantidad</th><th>Precio unit.</th><th>Descuento</th><th>Subtotal</th><th /></tr></thead>
             <tbody className="divide-y divide-[#292929] text-gray-200">
               {carrito.map((item) => (
                 <tr key={item.idProducto}>
                   <td className="py-3">{item.codigoSKU}</td><td>{item.nombre}</td>
                   <td><input aria-label={`Cantidad de ${item.nombre}`} type="number" min="0.01" step="0.01" max={existencias?.get(item.idProducto) ?? undefined} value={item.cantidad} onChange={(evento) => cambiarCantidad(item.idProducto, evento.target.value)} className="w-24 rounded border border-[#333] bg-[#1f1f1f] px-2 py-1" /></td>
-                  <td>{moneda.format(item.precio)}</td><td>{moneda.format(Number(item.precio) * Number(item.cantidad || 0))}</td>
+                  <td><PrecioProducto producto={item} /></td>
+                  <td className={calcularLinea(item).descuento > 0 ? 'text-emerald-400' : 'text-gray-500'}>{calcularLinea(item).descuento > 0 ? `-${moneda.format(calcularLinea(item).descuento)}` : '—'}</td>
+                  <td>{moneda.format(calcularLinea(item).neto)}</td>
                   <td><button type="button" title="Quitar producto" onClick={() => setCarrito((actual) => actual.filter((producto) => producto.idProducto !== item.idProducto))} className="p-2 text-gray-400 hover:text-red-400"><FiTrash2 /></button></td>
                 </tr>
               ))}
-              {carrito.length === 0 && <tr><td colSpan="6" className="py-6 text-center text-gray-500">Busca y agrega productos a la venta.</td></tr>}
+              {carrito.length === 0 && <tr><td colSpan="7" className="py-6 text-center text-gray-500">Busca y agrega productos a la venta.</td></tr>}
             </tbody>
           </table>
         </div>
       </section>
 
       <div className="flex flex-col items-end gap-4 border-t border-[#2a2a2a] pt-5">
-        <p className="text-lg font-semibold text-white">Total estimado: <span className="text-[#F2B01E]">{moneda.format(total)}</span></p>
+        {resumen.descuento > 0 && (
+          <div className="text-right text-sm text-gray-400">
+            <p>Subtotal: {moneda.format(resumen.bruto)}</p>
+            <p className="text-emerald-400">Descuentos aplicados: -{moneda.format(resumen.descuento)}</p>
+          </div>
+        )}
+        <p className="text-lg font-semibold text-white">Total estimado: <span className="text-[#F2B01E]">{moneda.format(resumen.total)}</span></p>
         {error && <p role="alert" className="w-full text-sm text-red-400">{error}</p>}
         {resultado && <div role="status" className="w-full border border-emerald-800 bg-emerald-950/40 p-4 text-sm text-emerald-200">
           {resultado.domicilio ? 'Domicilio registrado' : 'Venta registrada'} · Factura {resultado.factura?.numeroFactura || resultado.factura?.idFactura || 'generada'} · Total {moneda.format(resultado.factura?.total ?? resultado.total ?? 0)}

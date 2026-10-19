@@ -14,6 +14,8 @@ class Producto(db.Model):
     precio = db.Column(db.Numeric(12, 2), nullable=False)
     costoUnitario = db.Column(db.Numeric(12, 2), nullable=False)
     stockMinimo = db.Column(db.Integer, default=5, nullable=False)
+    # Descuento que define el administrador; se aplica solo al registrar la venta.
+    descuentoPorcentaje = db.Column(db.Numeric(5, 2), default=0, server_default="0", nullable=False)
 
     # Columnas de soporte
     activo = db.Column(db.Boolean, default=True, nullable=False)
@@ -27,6 +29,13 @@ class Producto(db.Model):
     unidad_medida = db.relationship('UnidadMedida', back_populates='productos')
     inventarios = db.relationship('Inventario', back_populates='producto')
 
+    __table_args__ = (
+        db.CheckConstraint(
+            '"descuentoPorcentaje" >= 0 AND "descuentoPorcentaje" <= 100',
+            name="ck_producto_descuento_rango",
+        ),
+    )
+
     def to_dict(self) -> dict:
         return {
             "idProducto": self.idProducto,
@@ -38,6 +47,7 @@ class Producto(db.Model):
             "precio": float(self.precio),
             "costoUnitario": float(self.costoUnitario),
             "stockMinimo": self.stockMinimo,
+            "descuentoPorcentaje": float(self.descuentoPorcentaje or 0),
             "activo": self.activo,
             "fecha_creacion": self.fecha_creacion.isoformat(),
         }

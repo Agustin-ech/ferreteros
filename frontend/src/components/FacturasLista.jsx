@@ -292,6 +292,7 @@ export default function FacturasLista({
               <th className="py-3 pr-2 font-medium">Sucursal</th>
               <th className="py-3 pr-2 font-medium">Vendedor</th>
               <th className="py-3 pr-2 font-medium">Cliente</th>
+              <th className="py-3 pr-2 font-medium">Descuento</th>
               <th className="py-3 pr-2 font-medium">Total</th>
               <th className="py-3 pr-2 font-medium">Estado</th>
               <th className="py-3 pr-4 font-medium">Acciones</th>
@@ -308,6 +309,7 @@ export default function FacturasLista({
                 <td className="py-3 pr-2 text-gray-400 whitespace-nowrap">{factura.sucursal}</td>
                 <td className="py-3 pr-2 text-gray-300">{factura.vendedor}</td>
                 <td className="py-3 pr-2 text-gray-300">{factura.cliente}</td>
+                <td className={`py-3 pr-2 whitespace-nowrap ${factura.descuento > 0 ? 'text-emerald-400' : 'text-gray-500'}`}>{factura.descuento > 0 ? `-${formatoCOP.format(factura.descuento)}` : '—'}</td>
                 <td className="py-3 pr-2 text-gray-200 font-semibold whitespace-nowrap">{formatoCOP.format(factura.total)}</td>
                 <td className="py-3 pr-2">
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap bg-blue-500/15 text-blue-400">
@@ -328,13 +330,13 @@ export default function FacturasLista({
             ))}
             {!cargando && filasPagina.length === 0 && (
               <tr>
-                <td colSpan={9} className="py-8 text-center text-gray-500 text-sm">
+                <td colSpan={10} className="py-8 text-center text-gray-500 text-sm">
                   Ninguna factura coincide con esos filtros.
                 </td>
               </tr>
             )}
             {cargando && (
-              <tr><td colSpan={9} className="py-8 text-center text-gray-500">Cargando facturas…</td></tr>
+              <tr><td colSpan={10} className="py-8 text-center text-gray-500">Cargando facturas…</td></tr>
             )}
           </tbody>
         </table>

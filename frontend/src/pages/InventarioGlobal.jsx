@@ -95,6 +95,7 @@ export default function InventarioGlobal({ productoParaBusqueda, onProductoAbier
         categoria: tiposProducto.find((tipo) => tipo.idTipoProducto === producto.idTipoProducto)?.nombre || 'Sin categoría',
         precio: Number(producto.precio || 0),
         compra: Number(producto.costoUnitario || 0),
+        descuentoPorcentaje: Number(producto.descuentoPorcentaje || 0),
         idTipoProducto: producto.idTipoProducto,
         idUnidadMedida: producto.idUnidadMedida,
         total,
@@ -137,6 +138,7 @@ export default function InventarioGlobal({ productoParaBusqueda, onProductoAbier
         ...actual,
         precio: Number(productoActualizado.precio),
         compra: Number(productoActualizado.costoUnitario),
+        descuentoPorcentaje: Number(productoActualizado.descuentoPorcentaje || 0),
       }
       : actual)
   }

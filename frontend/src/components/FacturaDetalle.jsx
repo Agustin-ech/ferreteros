@@ -68,6 +68,7 @@ export default function FacturaDetalle({ factura, onVolver }) {
                   <th className="py-2.5 px-4 font-medium">Producto</th>
                   <th className="py-2.5 pr-4 font-medium">Cantidad</th>
                   <th className="py-2.5 pr-4 font-medium">Precio unitario</th>
+                  <th className="py-2.5 pr-4 font-medium">Descuento</th>
                   <th className="py-2.5 pr-4 font-medium">Total</th>
                 </tr>
               </thead>
@@ -77,11 +78,12 @@ export default function FacturaDetalle({ factura, onVolver }) {
                     <td className="py-2.5 px-4 text-gray-200 font-medium">{producto.nombre}</td>
                     <td className="py-2.5 pr-4 text-gray-300">{producto.cantidad}</td>
                     <td className="py-2.5 pr-4 text-gray-300">{formatoCOP.format(producto.precioUnitario)}</td>
+                    <td className={`py-2.5 pr-4 ${producto.descuento > 0 ? 'text-emerald-400' : 'text-gray-500'}`}>{producto.descuento > 0 ? `-${formatoCOP.format(producto.descuento)}` : '—'}</td>
                     <td className="py-2.5 pr-4 text-gray-200 font-semibold">{formatoCOP.format(producto.total)}</td>
                   </tr>
                 ))}
                 {productos.length === 0 && (
-                  <tr><td colSpan={4} className="py-6 text-center text-gray-500">La venta no contiene detalles de productos.</td></tr>
+                  <tr><td colSpan={5} className="py-6 text-center text-gray-500">La venta no contiene detalles de productos.</td></tr>
                 )}
               </tbody>
             </table>
@@ -97,7 +99,7 @@ export default function FacturaDetalle({ factura, onVolver }) {
           {descuento > 0 && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-400">Descuento:</span>
-              <span className="text-gray-200">-{formatoCOP.format(descuento)}</span>
+              <span className="text-emerald-400">-{formatoCOP.format(descuento)}</span>
             </div>
           )}
           {costoEnvio > 0 && (
@@ -137,6 +139,7 @@ export default function FacturaDetalle({ factura, onVolver }) {
             <th className="py-2 font-semibold">Producto</th>
             <th className="py-2 font-semibold text-right">Cantidad</th>
             <th className="py-2 font-semibold text-right">Precio unitario</th>
+            <th className="py-2 font-semibold text-right">Descuento</th>
             <th className="py-2 font-semibold text-right">Total</th>
           </tr></thead>
           <tbody>
@@ -145,6 +148,7 @@ export default function FacturaDetalle({ factura, onVolver }) {
                 <td className="py-2">{producto.nombre}</td>
                 <td className="py-2 text-right">{producto.cantidad}</td>
                 <td className="py-2 text-right">{formatoCOP.format(producto.precioUnitario)}</td>
+                <td className="py-2 text-right">{producto.descuento > 0 ? `-${formatoCOP.format(producto.descuento)}` : '—'}</td>
                 <td className="py-2 text-right">{formatoCOP.format(producto.total)}</td>
               </tr>
             ))}

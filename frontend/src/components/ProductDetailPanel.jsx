@@ -53,6 +53,7 @@ export default function ProductDetailPanel({
   const [guardandoProducto, setGuardandoProducto] = useState(false)
   const [precioVenta, setPrecioVenta] = useState(String(producto.precio))
   const [costoCompra, setCostoCompra] = useState(String(producto.compra ?? 0))
+  const [descuento, setDescuento] = useState(String(producto.descuentoPorcentaje ?? 0))
   const [mensaje, setMensaje] = useState('')
   const [esError, setEsError] = useState(false)
 
@@ -69,7 +70,8 @@ export default function ProductDetailPanel({
   useEffect(() => {
     setPrecioVenta(String(producto.precio))
     setCostoCompra(String(producto.compra ?? 0))
-  }, [producto.id, producto.precio, producto.compra])
+    setDescuento(String(producto.descuentoPorcentaje ?? 0))
+  }, [producto.id, producto.precio, producto.compra, producto.descuentoPorcentaje])
 
   const cargarHistorial = useCallback(async () => {
     if (!producto.id || !idSucursal) {
@@ -97,9 +99,15 @@ export default function ProductDetailPanel({
     setMensaje('')
     const precio = Number(precioVenta)
     const costoUnitario = Number(costoCompra)
+    const descuentoPorcentaje = Number(descuento || 0)
     if (!Number.isFinite(precio) || precio < 0.01 || !Number.isFinite(costoUnitario) || costoUnitario < 0.01) {
       setEsError(true)
       setMensaje('Los precios de compra y venta deben ser mayores que cero.')
+      return
+    }
+    if (!Number.isFinite(descuentoPorcentaje) || descuentoPorcentaje < 0 || descuentoPorcentaje > 100) {
+      setEsError(true)
+      setMensaje('El descuento debe estar entre 0 y 100 %.')
       return
     }
 
@@ -110,10 +118,11 @@ export default function ProductDetailPanel({
         idUnidadMedida: producto.idUnidadMedida,
         precio,
         costoUnitario,
+        descuentoPorcentaje,
       })
       onProductoActualizado?.(data)
       setEsError(false)
-      setMensaje('Precios del producto actualizados.')
+      setMensaje('Precios y descuento del producto actualizados.')
     } catch (error) {
       setEsError(true)
       setMensaje(error?.response?.data?.mensaje || error?.response?.data?.error || 'No se pudieron actualizar los precios.')
@@ -217,6 +226,12 @@ export default function ProductDetailPanel({
               <p className="text-xs text-gray-500">Precio de compra</p>
               <p className="font-semibold text-white">{formatoCOP.format(producto.compra)}</p>
             </div>
+            {Number(producto.descuentoPorcentaje) > 0 && (
+              <div>
+                <p className="text-xs text-gray-500">Con descuento ({Number(producto.descuentoPorcentaje)} %)</p>
+                <p className="font-semibold text-emerald-400">{formatoCOP.format(producto.precio * (1 - Number(producto.descuentoPorcentaje) / 100))}</p>
+              </div>
+            )}
             <div>
               <p className="text-xs text-gray-500">Valor total del inventario</p>
               <p className="font-semibold text-white">{formatoCOP.format(valorTotal)}</p>
@@ -232,7 +247,7 @@ export default function ProductDetailPanel({
         </div>
 
         <form onSubmit={handleGuardarPrecios} className="border border-panel-border rounded-lg p-3 flex flex-col gap-3">
-          <p className="text-xs font-semibold text-gray-300">Editar precios del producto</p>
+          <p className="text-xs font-semibold text-gray-300">Editar precios y descuento del producto</p>
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-xs text-gray-400">
               Precio de venta
@@ -242,9 +257,13 @@ export default function ProductDetailPanel({
               Precio de compra
               <input type="number" min="0.01" step="0.01" value={costoCompra} onChange={(e) => setCostoCompra(e.target.value)} className="bg-panel-bg border border-panel-border rounded-lg px-2.5 py-2 text-sm text-gray-200 outline-none" />
             </label>
+            <label className="col-span-2 flex flex-col gap-1 text-xs text-gray-400">
+              Descuento (%) · se aplica automáticamente en las ventas
+              <input type="number" min="0" max="100" step="0.01" value={descuento} onChange={(e) => setDescuento(e.target.value)} className="bg-panel-bg border border-panel-border rounded-lg px-2.5 py-2 text-sm text-gray-200 outline-none" />
+            </label>
           </div>
           <button type="submit" disabled={guardandoProducto} className="flex items-center justify-center gap-2 bg-panel-bg border border-panel-border text-gray-200 font-semibold text-sm rounded-lg py-2 hover:bg-white/5 disabled:opacity-50">
-            <Save size={15} /> {guardandoProducto ? 'Guardando...' : 'Guardar precios'}
+            <Save size={15} /> {guardandoProducto ? 'Guardando...' : 'Guardar cambios'}
           </button>
           {mensaje && (
             <p role="status" className={`text-xs text-center ${esError ? 'text-red-400' : 'text-emerald-400'}`}>
