@@ -189,6 +189,7 @@ export function normalizarVenta(venta, sucursales = []) {
       nombre: detalle.nombreProducto || `Producto #${detalle.idProducto}`,
       cantidad: Number(detalle.cantidad || 0),
       precioUnitario: Number(detalle.precioUnitario || 0),
+      descuento: Number(detalle.descuento || 0),
       total: Number(detalle.subtotal || 0),
     })),
   }

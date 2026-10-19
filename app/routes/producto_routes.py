@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 from marshmallow import ValidationError
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
@@ -42,6 +42,8 @@ def _referencias_validas(data):
 @roles_required("admin", "bodega")
 def crear_producto():
     data = producto_schema.load(request.get_json(silent=True))
+    if data.get("descuentoPorcentaje") and g.usuario["rol"] != "admin":
+        return _error("Solo el administrador puede asignar descuentos.", 403)
     error_referencia = _referencias_validas(data)
     if error_referencia:
         return _error(error_referencia, 400)
@@ -136,6 +138,9 @@ def actualizar_producto(producto_id):
         data = producto_schema.load(json_data, partial=True)
     except ValidationError as error:
         return jsonify({"error": "Datos inválidos.", "detalles": error.messages}), 400
+
+    if "descuentoPorcentaje" in data and g.usuario["rol"] != "admin":
+        return _error("Solo el administrador puede asignar descuentos.", 403)
 
     error_referencia = _referencias_validas(data)
     if error_referencia:

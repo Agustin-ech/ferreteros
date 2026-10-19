@@ -1,7 +1,7 @@
 // Este archivo es el antiguo App.jsx del panel admin, renombrado a AdminApp.jsx.
 // Único cambio: recibe onLogout y se lo pasa al Header (botón "Cerrar sesión").
 // El nuevo App.jsx decide si mostrar el Login, este panel o el de Bodega.
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Sidebar from './components/Sidebar'
 import Header from './components/Header'
 import ApiState from './components/ApiState'
@@ -153,26 +153,36 @@ export default function AdminApp({ onLogout }) {
   const [errorVentas, setErrorVentas] = useState('')
   const [productoParaBusqueda, setProductoParaBusqueda] = useState(null)
 
-  useEffect(() => {
-    let cancelado = false
+  // Solo se aplica la respuesta de la última petición, por si el usuario
+  // cambia de página antes de que termine la anterior.
+  const ultimaCargaVentas = useRef(0)
+  const cargarVentas = useCallback(() => {
+    const carga = ++ultimaCargaVentas.current
     listarVentas()
       .then(({ ventas: resultados, errorNombres }) => {
-        if (!cancelado) {
+        if (carga === ultimaCargaVentas.current) {
           setVentas(resultados)
           setErrorVentas(errorNombres)
         }
       })
       .catch((error) => {
-        if (!cancelado) {
+        if (carga === ultimaCargaVentas.current) {
           setErrorVentas(error.message || 'No se pudieron cargar las ventas desde el servidor.')
         }
       })
       .finally(() => {
-        if (!cancelado) setVentasCargando(false)
+        if (carga === ultimaCargaVentas.current) setVentasCargando(false)
       })
-
-    return () => { cancelado = true }
   }, [])
+
+  // Se recargan al entrar a las páginas que muestran ventas o facturas, para
+  // que aparezcan las ventas registradas después de abrir el panel.
+  const muestraVentas = ['inicio', 'facturas', 'todas-las-facturas', 'ingresos'].includes(activePage)
+    || activePage.startsWith('facturas-sucursal-')
+  useEffect(() => {
+    if (muestraVentas) cargarVentas()
+  }, [activePage, muestraVentas, cargarVentas])
+  useEffect(() => () => { ultimaCargaVentas.current += 1 }, [])
 
   const facturasState = useMemo(
     () => ventas

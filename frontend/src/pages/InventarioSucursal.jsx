@@ -75,6 +75,10 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
         nombre: producto.nombre,
         categoria: producto.tipo_producto?.nombre || producto.tipo || 'Sin categoría',
         precio: Number(producto.precio || 0),
+        compra: Number(producto.costoUnitario || 0),
+        descuentoPorcentaje: Number(producto.descuentoPorcentaje || 0),
+        idTipoProducto: producto.idTipoProducto,
+        idUnidadMedida: producto.idUnidadMedida,
         stock,
         total: stock,
         estado: getEstado(stock),
@@ -308,6 +312,17 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
             producto={productoSeleccionado}
             sucursales={[{ idSucursal, nombreSucursal }]}
             onAjusteGuardado={actualizarInventario}
+            onProductoActualizado={(actualizado) => {
+              setProductos((actuales) => actuales.map((producto) =>
+                producto.idProducto === actualizado.idProducto ? { ...producto, ...actualizado } : producto
+              ))
+              setProductoSeleccionado((actual) => actual && {
+                ...actual,
+                precio: Number(actualizado.precio),
+                compra: Number(actualizado.costoUnitario),
+                descuentoPorcentaje: Number(actualizado.descuentoPorcentaje || 0),
+              })
+            }}
             onVolver={() => setProductoSeleccionado(null)}
           />
         )}

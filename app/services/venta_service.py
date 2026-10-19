@@ -99,29 +99,43 @@ class VentaService:
                 if not cliente or not cliente.activo:
                     raise ValueError("El cliente no existe o está inactivo.")
 
+            # El descuento del producto lo fija el administrador y se aplica
+            # aquí, no desde el cliente. Venta.subtotal guarda el valor bruto y
+            # descuentoTotal suma los descuentos de producto y el manual; el
+            # subtotal de cada detalle queda neto para que las devoluciones
+            # reembolsen lo que realmente se pagó.
             detalles_calculados = []
             subtotal_venta = Decimal("0.00")
+            descuento_productos = Decimal("0.00")
             for item in items:
                 producto = productos_por_id[item["idProducto"]]
                 cantidad = item["cantidad"]
-                subtotal = (producto.precio * cantidad).quantize(
+                bruto = (producto.precio * cantidad).quantize(
                     VentaService.CENTAVO,
                     rounding=ROUND_HALF_UP,
                 )
-                subtotal_venta += subtotal
+                porcentaje = Decimal(str(producto.descuentoPorcentaje or 0))
+                descuento_linea = (bruto * porcentaje / 100).quantize(
+                    VentaService.CENTAVO,
+                    rounding=ROUND_HALF_UP,
+                )
+                subtotal_venta += bruto
+                descuento_productos += descuento_linea
                 detalles_calculados.append({
                     "idProducto": producto.idProducto,
                     "cantidad": cantidad,
                     "precio_unitario": producto.precio,
-                    "subtotal": subtotal,
+                    "descuento": descuento_linea,
+                    "subtotal": bruto - descuento_linea,
                 })
 
-            descuento = data_validada["descuento"].quantize(
+            descuento_manual = data_validada["descuento"].quantize(
                 VentaService.CENTAVO,
                 rounding=ROUND_HALF_UP,
             )
-            if descuento > subtotal_venta:
+            if descuento_manual > subtotal_venta - descuento_productos:
                 raise ValueError("El descuento no puede ser mayor al total de la venta.")
+            descuento = descuento_productos + descuento_manual
 
             cargo_adicional = Decimal(str(cargo_adicional)).quantize(
                 VentaService.CENTAVO,
@@ -150,7 +164,7 @@ class VentaService:
                         idProducto=detalle["idProducto"],
                         cantidad=detalle["cantidad"],
                         precio_unitario=detalle["precio_unitario"],
-                        descuento=Decimal("0.00"),
+                        descuento=detalle["descuento"],
                         subtotal=detalle["subtotal"],
                     )
                 )

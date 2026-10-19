@@ -175,6 +175,83 @@ def test_registrar_venta_persiste_modelos_y_descuenta_stock(app):
 		assert respuesta["factura"]["activo"] is True
 
 
+def test_venta_aplica_descuento_del_producto_automaticamente(app):
+	with app.app_context():
+		db.session.get(Producto, 1).descuentoPorcentaje = Decimal("10")
+		db.session.commit()
+
+		data = venta_input_schema.load(payload_venta(descuento=0, detalles=[{"idProducto": 1, "cantidad": 2}]))
+		venta = VentaService.registrar_venta(
+			data,
+			{"id": 7, "rol": "admin", "sucursal_id": None},
+		)
+
+		# 2 x 10.10 = 20.20 bruto; 10 % = 2.02 de descuento.
+		assert venta.subtotal == Decimal("20.20")
+		assert venta.descuentoTotal == Decimal("2.02")
+		assert venta.total == Decimal("18.18")
+		assert venta.detalles[0].precio_unitario == Decimal("10.10")
+		assert venta.detalles[0].descuento == Decimal("2.02")
+		assert venta.detalles[0].subtotal == Decimal("18.18")
+		assert venta.factura.valorTotal == Decimal("18.18")
+
+
+def test_descuento_manual_se_suma_al_del_producto(app):
+	with app.app_context():
+		db.session.get(Producto, 1).descuentoPorcentaje = Decimal("10")
+		db.session.commit()
+
+		data = venta_input_schema.load(payload_venta(descuento=1, detalles=[{"idProducto": 1, "cantidad": 2}]))
+		venta = VentaService.registrar_venta(
+			data,
+			{"id": 7, "rol": "admin", "sucursal_id": None},
+		)
+
+		assert venta.descuentoTotal == Decimal("3.02")
+		assert venta.total == Decimal("17.18")
+
+
+def test_solo_admin_asigna_descuento_a_producto(app):
+	from flask_jwt_extended import create_access_token
+
+	with app.app_context():
+		token_bodega = create_access_token(identity="7", additional_claims={"rol": "bodega", "idSucursal": 1})
+		token_admin = create_access_token(identity="7", additional_claims={"rol": "admin", "idSucursal": None})
+
+	client = app.test_client()
+	respuesta = client.put(
+		"/api/productos/1",
+		json={"descuentoPorcentaje": 15},
+		headers={"Authorization": f"Bearer {token_bodega}"},
+	)
+	assert respuesta.status_code == 403
+
+	respuesta = client.put(
+		"/api/productos/1",
+		json={"descuentoPorcentaje": 15},
+		headers={"Authorization": f"Bearer {token_admin}"},
+	)
+	assert respuesta.status_code == 200
+	assert respuesta.json["descuentoPorcentaje"] == 15
+	assert respuesta.json["precioConDescuento"] == 8.59
+
+	respuesta = client.put(
+		"/api/productos/1",
+		json={"descuentoPorcentaje": 101},
+		headers={"Authorization": f"Bearer {token_admin}"},
+	)
+	assert respuesta.status_code == 400
+
+	# Un PUT que no envía el descuento (como el de bodega) no lo borra.
+	respuesta = client.put(
+		"/api/productos/1",
+		json={"precio": 10.10},
+		headers={"Authorization": f"Bearer {token_bodega}"},
+	)
+	assert respuesta.status_code == 200
+	assert respuesta.json["descuentoPorcentaje"] == 15
+
+
 def test_vendedor_no_puede_vender_en_otra_sucursal(app):
 	with app.app_context():
 		data = venta_input_schema.load(payload_venta(idSucursal=2))
