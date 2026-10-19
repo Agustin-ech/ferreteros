@@ -1,9 +1,18 @@
 import React, {useState}from 'react';
 import { FiShoppingCart, FiPlus } from 'react-icons/fi';
+import api from '../../api/client';
+import { errorMessage } from '../../api/client';
 
 export default function NuevaVenta() {
     const [ccNit, setCcNit] = useState('');
     const [telefono, setTelefono] = useState('');
+    const [nombres, setNombres] = useState('');
+    const [apellidos, setApellidos] = useState('');
+    const [correo, setCorreo] = useState('');
+    const [direccion, setDireccion] = useState('');
+    const [buscandoCliente, setBuscandoCliente] = useState(false);
+    const [errorCliente, setErrorCliente] = useState('');
+    const [clienteEncontrado, setClienteEncontrado] = useState('');
     const [tipoPago, setTipoPago] = useState('Efectivo'); // Seleccionado por defecto
     const [fecha, setFecha] = useState('');
 
@@ -11,6 +20,53 @@ export default function NuevaVenta() {
         const valor = e.target.value;
         const soloNumeros = valor.replace(/\D/g, ''); // \D elimina todo lo que no sea dígito
         setter(soloNumeros);
+    };
+
+    const handleDocumentoChange = (e) => {
+        handleSoloNumeros(e, setCcNit);
+        setNombres('');
+        setApellidos('');
+        setCorreo('');
+        setDireccion('');
+        setTelefono('');
+        setErrorCliente('');
+        setClienteEncontrado('');
+    };
+
+    const buscarCliente = async () => {
+        setErrorCliente('');
+        setClienteEncontrado('');
+        if (!ccNit) {
+            setErrorCliente('Ingresa el documento del cliente para buscarlo.');
+            return;
+        }
+
+        setBuscandoCliente(true);
+        try {
+            const respuesta = await api.get('/api/clientes', {
+                params: { q: ccNit, por_pagina: 100 },
+            });
+            const cliente = respuesta.data.items.find(
+                (item) => item.numeroDocumento === ccNit,
+            );
+            if (!cliente) {
+                setErrorCliente('No se encontró un cliente con ese documento.');
+                return;
+            }
+
+            setNombres([cliente.primerNombre, cliente.segundoNombre].filter(Boolean).join(' '));
+            setApellidos([cliente.primerApellido, cliente.segundoApellido].filter(Boolean).join(' '));
+            setCorreo(cliente.correoElectronico || '');
+            setDireccion(cliente.direccion || '');
+            setTelefono(cliente.telefono || '');
+            setClienteEncontrado(
+                `Cliente encontrado: ${cliente.primerNombre} ${cliente.primerApellido}`,
+            );
+        } catch (error) {
+            setErrorCliente(errorMessage(error, 'No fue posible buscar el cliente.'));
+        } finally {
+            setBuscandoCliente(false);
+        }
     };
 
     //formatear la fecha automáticamente como DD/MM/AAAA
@@ -47,6 +103,8 @@ export default function NuevaVenta() {
                     <label className="block text-xs text-gray-400 mb-1">Nombres:</label>
                     <input 
                     type="text" 
+                    value={nombres}
+                    onChange={(e) => setNombres(e.target.value)}
                     placeholder="Ej. Andres sebastian" 
                     className="w-full bg-[#1f1f1f] border border-[#333]/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#F2B01E]" />
                 </div>
@@ -54,6 +112,8 @@ export default function NuevaVenta() {
                     <label className="block text-xs text-gray-400 mb-1">Apellidos:</label>
                     <input 
                     type="text" 
+                    value={apellidos}
+                    onChange={(e) => setApellidos(e.target.value)}
                     placeholder="Ej. lopez caica" 
                     className="w-full bg-[#1f1f1f] border border-[#333]/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#F2B01E]" />
                 </div>
@@ -62,14 +122,24 @@ export default function NuevaVenta() {
                     <input 
                     type="text" 
                     value={ccNit}
-                    onChange={(e) => handleSoloNumeros(e, setCcNit)}
+                    onChange={handleDocumentoChange}
                     placeholder="0.000.000.00" 
                     className="w-full bg-[#1f1f1f] border border-[#333]/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#F2B01E]" />
+                    <button
+                    type="button"
+                    onClick={buscarCliente}
+                    disabled={buscandoCliente}
+                    className="mt-2 rounded-lg border border-[#333] px-3 py-1.5 text-xs text-gray-200 hover:border-[#F2B01E] disabled:opacity-50"
+                    >
+                    {buscandoCliente ? 'Buscando...' : 'Buscar cliente'}
+                    </button>
                 </div>
                 <div>
                     <label className="block text-xs text-gray-400 mb-1">Gmail:</label>
                     <input 
                     type="text" 
+                    value={correo}
+                    onChange={(e) => setCorreo(e.target.value)}
                     placeholder="Ej. tu_correo@correo.com" 
                     className="w-full bg-[#1f1f1f] border border-[#333]/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#F2B01E]" />
                 </div>
@@ -77,6 +147,8 @@ export default function NuevaVenta() {
                     <label className="block text-xs text-gray-400 mb-1">Dirección:</label>
                     <input 
                     type="text" 
+                    value={direccion}
+                    onChange={(e) => setDireccion(e.target.value)}
                     placeholder="Ej. Calle 00 # 0-00" 
                     className="w-full bg-[#1f1f1f] border border-[#333]/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#F2B01E]" />
                 </div>
@@ -89,6 +161,9 @@ export default function NuevaVenta() {
                     placeholder="Ej. 000000000" 
                     className="w-full bg-[#1f1f1f] border border-[#333]/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#F2B01E]" />
                 </div>
+                <p role={errorCliente ? 'alert' : 'status'} aria-live="polite" className={`text-xs ${errorCliente ? 'text-red-400' : 'text-green-400'}`}>
+                    {errorCliente || clienteEncontrado}
+                </p>
                 </div>
             </div>
 

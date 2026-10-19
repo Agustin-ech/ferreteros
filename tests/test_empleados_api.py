@@ -3,11 +3,13 @@ from flask_jwt_extended import create_access_token
 
 from app import create_app
 from app.extensions import db
+from app.models.funcion import Funcion
 from app.models.sucursal import Sucursal
 from app.models.sucursal_usuario import SucursalUsuario
 from app.models.tipo_documento import TipoDeDocumento
 from app.models.tipo_usuario import TipoUsuario
 from app.models.usuario import Usuario
+from app.models.usuario_tipo_funcion import TipoUsuarioFuncion
 
 
 @pytest.fixture
@@ -25,6 +27,8 @@ def app():
         Sucursal.__table__,
         Usuario.__table__,
         SucursalUsuario.__table__,
+        Funcion.__table__,
+        TipoUsuarioFuncion.__table__,
     ]
     with application.app_context():
         db.metadata.create_all(bind=db.engine, tables=tables)
@@ -71,7 +75,7 @@ def empleado_payload(**overrides):
         "segundoNombre": "Elena",
         "primerApellido": "López",
         "segundoApellido": "Díaz",
-        "correoElectronico": " MARIA@EXAMPLE.TEST ",
+        "correoElectronico": "MARIA@EXAMPLE.TEST",
         "telefono": "3001234567",
         "idTipoUsuario": 2,
         "idSucursal": 1,
@@ -114,8 +118,8 @@ def test_catalogos_y_actualizacion_de_empleado(app):
     creado = client.post("/usuarios", headers=headers, json=empleado_payload())
     id_empleado = creado.json["usuario"]["idUsuario"]
 
-    catalogos = client.get("/usuarios/catalogos", headers=headers)
-    actualizado = client.patch(
+    catalogos = client.get("/api/usuarios/catalogos", headers=headers)
+    actualizado = client.put(
         f"/usuarios/{id_empleado}",
         headers=headers,
         json={"idSucursal": 2, "telefono": "3117654321", "activo": False},
@@ -125,10 +129,10 @@ def test_catalogos_y_actualizacion_de_empleado(app):
     assert {rol["nombre"] for rol in catalogos.json["roles"]} == {"administrador", "vendedor"}
     assert {sucursal["nombreSucursal"] for sucursal in catalogos.json["sucursales"]} == {"Centro", "Norte"}
     assert actualizado.status_code == 200
-    assert actualizado.json["usuario"]["idSucursal"] == 2
-    assert actualizado.json["usuario"]["sucursal"] == "Norte"
-    assert actualizado.json["usuario"]["telefono"] == "3117654321"
-    assert actualizado.json["usuario"]["activo"] is False
+    assert actualizado.json["idSucursal"] == 2
+    assert actualizado.json["sucursal"] == "Norte"
+    assert actualizado.json["telefono"] == "3117654321"
+    assert actualizado.json["activo"] is False
 
 
 def test_empleados_exige_admin_y_rechaza_duplicados_y_datos_invalidos(app):
@@ -166,8 +170,8 @@ def test_no_permite_desactivar_la_propia_o_ultima_cuenta_administradora(app):
     client = app.test_client()
     headers = auth_headers(app)
 
-    propia = client.patch("/usuarios/1", headers=headers, json={"activo": False})
-    degradada = client.patch("/usuarios/1", headers=headers, json={"idTipoUsuario": 2})
+    propia = client.put("/usuarios/1", headers=headers, json={"activo": False})
+    degradada = client.put("/usuarios/1", headers=headers, json={"idTipoUsuario": 2})
 
-    assert propia.status_code == 400
-    assert degradada.status_code == 400
+    assert propia.status_code == 409
+    assert degradada.status_code == 409

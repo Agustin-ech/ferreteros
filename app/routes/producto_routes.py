@@ -62,6 +62,10 @@ def crear_producto():
 @roles_required("admin", "bodega", "vendedor")
 def listar_productos():
     consulta = Producto.query
+    incluir_inactivos = request.args.get("incluirInactivos", "false").lower() == "true"
+    if not incluir_inactivos:
+        consulta = consulta.filter_by(activo=True)
+
     texto = (request.args.get("q") or request.args.get("nombre") or "").strip()
     if texto:
         patron = f"%{texto}%"
@@ -86,8 +90,14 @@ def listar_catalogos_producto():
     tipos = TipoProducto.query.filter_by(activo=True).order_by(TipoProducto.nombre).all()
     unidades = UnidadMedida.query.filter_by(activo=True).order_by(UnidadMedida.nombre).all()
     return jsonify({
-        "tiposProducto": [tipo.to_dict() for tipo in tipos],
-        "unidadesMedida": [unidad.to_dict() for unidad in unidades],
+        "tipos": [
+            {"idTipoProducto": tipo.idTipoProducto, "nombre": tipo.nombre}
+            for tipo in tipos
+        ],
+        "unidades": [
+            {"idUnidadMedida": unidad.idUnidadMedida, "nombre": unidad.nombre}
+            for unidad in unidades
+        ],
     }), 200
 
 
@@ -97,6 +107,18 @@ def obtener_producto(producto_id):
     producto = db.session.get(Producto, producto_id)
     if producto is None:
         return _error("El producto no existe.", 404)
+    return jsonify(producto_schema.dump(producto)), 200
+
+
+@producto_bp.delete("/<int:producto_id>")
+@roles_required("admin", "bodega")
+def desactivar_producto(producto_id):
+    producto = db.session.get(Producto, producto_id)
+    if producto is None:
+        return _error("El producto no existe.", 404)
+
+    producto.activo = False
+    db.session.commit()
     return jsonify(producto_schema.dump(producto)), 200
 
 

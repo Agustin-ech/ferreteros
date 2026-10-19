@@ -44,6 +44,7 @@ from app.errors.reportes import (
     SucursalNoEncontrada,
 )
 from app.extensions import db
+from app.utils.roles import normalizar_rol
 
 
 # =============================================================================
@@ -544,31 +545,40 @@ def sucursales_autorizadas(usuario=None) -> list[int] | None:
     """
     IDs de sucursal que el usuario puede consultar, o None si puede verlas todas.
 
-    TODO(proyecto): reemplazar por tu lógica real de roles. Ejemplos:
-        ADMIN                       -> None                       (ve todo el consolidado)
-        SUPERVISOR de una sucursal  -> [usuario.sucursal_id]
-        AUDITOR multi-sucursal      -> [s.idSucursal for s in usuario.sucursales]
-
-    Hoy se apoya en los atributos más comunes para que el módulo funcione ya:
-    `usuario.es_admin`, `usuario.rol`, `usuario.sucursal_id` / `usuario.id_sucursal`
-    y la relación `usuario.sucursales` (si existe).
+    Para usuarios no administradores, la sucursal efectiva es la primera asignación
+    activa ordenada por ID, igual que en el JWT y el perfil enviado al panel.
     """
     if usuario is None:
         return []
     tipo_usuario = getattr(usuario, "tipo_usuario", None)
     rol = getattr(usuario, "rol", None) or getattr(tipo_usuario, "nombre", "")
-    if getattr(usuario, "es_admin", False) or str(rol).upper() in ("ADMIN", "ADMINISTRADOR"):
+    if getattr(usuario, "es_admin", False) or normalizar_rol(rol) == "admin":
         return None
 
     relacionadas = getattr(usuario, "sucursales", None)
     if relacionadas is not None and hasattr(relacionadas, "__iter__") and not isinstance(relacionadas, (str, bytes)):
-        ids = [
-            getattr(asignacion, "idSucursal", None)
-            or sucursal_id(getattr(asignacion, "sucursal", asignacion))
-            for asignacion in relacionadas
-            if getattr(asignacion, "activo", True)
-        ]
-        return [id_sucursal for id_sucursal in ids if id_sucursal is not None]
+        asignaciones = sorted(
+            (
+                asignacion
+                for asignacion in relacionadas
+                if getattr(asignacion, "activo", True)
+                and getattr(getattr(asignacion, "sucursal", None), "activa", True)
+            ),
+            key=lambda asignacion: (
+                getattr(asignacion, "idSucursal", None)
+                or sucursal_id(getattr(asignacion, "sucursal", asignacion))
+                or 0
+            ),
+        )
+        id_autorizado = next(
+            (
+                getattr(asignacion, "idSucursal", None)
+                or sucursal_id(getattr(asignacion, "sucursal", asignacion))
+                for asignacion in asignaciones
+            ),
+            None,
+        )
+        return [id_autorizado] if id_autorizado is not None else []
 
     for atributo in ("sucursal_id", "id_sucursal", "idSucursal"):
         valor = getattr(usuario, atributo, None)
@@ -670,6 +680,12 @@ REPORTES: dict[str, dict] = {
         "parametros": ["buscar", "solo_agotados", "limite"],
         "consolidable": True,
     },
+    "mercancia-danada": {
+        "nombre": "Reporte de mercancía dañada",
+        "descripcion": "Unidades y valor de las pérdidas por daño, con detalle por motivo y sucursal.",
+        "parametros": ["idProducto", "idTipoDanio", "estado", "buscar", "limite"],
+        "consolidable": True,
+    },
     "consolidado-sucursales": {
         "nombre": "Consolidado comparativo por sucursal",
         "descripcion": "Comparativo lado a lado de ventas, devoluciones, netas y cobertura de facturación.",
@@ -746,6 +762,7 @@ TITULOS = {
     "devoluciones": "Reporte de devoluciones",
     "ventas-por-producto": "Reporte de ventas por producto",
     "inventario-existencias": "Reporte de existencias de mercancía",
+    "mercancia-danada": "Reporte de mercancía dañada",
     "consolidado-sucursales": "Consolidado comparativo por sucursal",
     "compras": "Reporte de compras a proveedores",
 }
@@ -1598,6 +1615,194 @@ def reporte_inventario_existencias(db, alcance, desde, hasta, *, buscar=None, so
                               "mostradas son las vigentes a la fecha de generación."))
 
 
+# =========================================================================== 6. MERCANCÍA DAÑADA
+def reporte_mercancia_danada(
+    db,
+    alcance,
+    desde,
+    hasta,
+    *,
+    idProducto=None,
+    idTipoDanio=None,
+    estado=None,
+    buscar=None,
+    limite=None,
+) -> dict:
+    """Resume las pérdidas por mercancía dañada y lista los registros del periodo."""
+    from app.models.mercancia_danada import ESTADO_ANULADA, MercanciaDanada, TipoDanio
+
+    Producto = modelo("Producto")
+    Sucursal = modelo("Sucursal")
+    ini, fin = rango_datetime(db, desde, hasta)
+    condiciones = [
+        MercanciaDanada.fecha.between(ini, fin),
+        MercanciaDanada.estado != ESTADO_ANULADA,
+    ]
+    if idProducto is not None:
+        condiciones.append(MercanciaDanada.idProducto == idProducto)
+    if idTipoDanio is not None:
+        condiciones.append(MercanciaDanada.idTipoDanio == idTipoDanio)
+    if estado:
+        condiciones.append(MercanciaDanada.estado == estado)
+    if buscar:
+        termino = buscar.strip()
+        condiciones.append(or_(
+            buscar_ilike(MercanciaDanada.descripcion, termino),
+            buscar_ilike(Producto.nombre, termino),
+            buscar_ilike(Producto.codigoSKU, termino),
+            buscar_ilike(TipoDanio.nombre, termino),
+        ))
+
+    filtro = and_(*condiciones)
+    total_registros, unidades, valor_total = db.session.execute(
+        alcance.filtrar(
+            select(
+                func.count(MercanciaDanada.idMercanciaDanada),
+                func.coalesce(func.sum(MercanciaDanada.cantidad), 0),
+                func.coalesce(func.sum(MercanciaDanada.valorPerdida), 0),
+            )
+            .join(Producto, Producto.idProducto == MercanciaDanada.idProducto)
+            .join(TipoDanio, TipoDanio.idTipoDanio == MercanciaDanada.idTipoDanio)
+            .where(filtro),
+            MercanciaDanada.idSucursal,
+        )
+    ).one()
+    total_registros = int(total_registros)
+    unidades = d(unidades)
+    valor_total = d(valor_total)
+
+    agrupado_motivo = db.session.execute(
+        alcance.filtrar(
+            select(
+                TipoDanio.nombre,
+                func.count(MercanciaDanada.idMercanciaDanada),
+                func.coalesce(func.sum(MercanciaDanada.cantidad), 0),
+                func.coalesce(func.sum(MercanciaDanada.valorPerdida), 0),
+            )
+            .join(TipoDanio, TipoDanio.idTipoDanio == MercanciaDanada.idTipoDanio)
+            .join(Producto, Producto.idProducto == MercanciaDanada.idProducto)
+            .where(filtro)
+            .group_by(TipoDanio.nombre)
+            .order_by(func.sum(MercanciaDanada.valorPerdida).desc()),
+            MercanciaDanada.idSucursal,
+        )
+    ).all()
+
+    columnas_motivo = [
+        columna("motivo", "Motivo", ancho=1.8),
+        col_entero("registros", "Registros", ancho=0.8),
+        col_cantidad("unidades", "Unidades", ancho=0.9),
+        col_moneda("valor", "Valor de la pérdida"),
+        col_porcentaje("participacion", "% del total"),
+    ]
+    secciones = [seccion(
+        "Mercancía dañada por motivo",
+        columnas_motivo,
+        [[nombre, int(n), d(cantidad), d(valor), porcentaje(d(valor), valor_total)]
+         for nombre, n, cantidad, valor in agrupado_motivo],
+        totales=["TOTAL", total_registros, unidades, valor_total, 100.0 if valor_total else 0.0],
+    )]
+
+    if alcance.es_consolidado:
+        agrupado_sucursal = db.session.execute(
+            alcance.filtrar(
+                select(
+                    Sucursal.nombreSucursal,
+                    func.count(MercanciaDanada.idMercanciaDanada),
+                    func.coalesce(func.sum(MercanciaDanada.cantidad), 0),
+                    func.coalesce(func.sum(MercanciaDanada.valorPerdida), 0),
+                )
+                .join(Sucursal, Sucursal.idSucursal == MercanciaDanada.idSucursal)
+                .join(Producto, Producto.idProducto == MercanciaDanada.idProducto)
+                .join(TipoDanio, TipoDanio.idTipoDanio == MercanciaDanada.idTipoDanio)
+                .where(filtro)
+                .group_by(Sucursal.nombreSucursal)
+                .order_by(func.sum(MercanciaDanada.valorPerdida).desc()),
+                MercanciaDanada.idSucursal,
+            )
+        ).all()
+        secciones.append(seccion(
+            "Mercancía dañada por sucursal",
+            [
+                columna("sucursal", "Sucursal", ancho=1.8),
+                col_entero("registros", "Registros", ancho=0.8),
+                col_cantidad("unidades", "Unidades", ancho=0.9),
+                col_moneda("valor", "Valor de la pérdida"),
+                col_porcentaje("participacion", "% del total"),
+            ],
+            [[nombre, int(n), d(cantidad), d(valor), porcentaje(d(valor), valor_total)]
+             for nombre, n, cantidad, valor in agrupado_sucursal],
+            totales=["TOTAL CONSOLIDADO", total_registros, unidades, valor_total,
+                     100.0 if valor_total else 0.0],
+        ))
+
+    columnas_detalle = [columna("fecha", "Fecha", "fecha", alineacion="centro", ancho=0.9)]
+    campos_detalle = [MercanciaDanada.fecha]
+    if alcance.es_consolidado:
+        columnas_detalle.append(columna("sucursal", "Sucursal", ancho=1.5))
+        campos_detalle.append(Sucursal.nombreSucursal)
+    columnas_detalle += [
+        columna("codigo", "Código", ancho=0.9),
+        columna("producto", "Producto", ancho=1.8),
+        columna("motivo", "Motivo", ancho=1.3),
+        col_cantidad("cantidad", "Cantidad", ancho=0.8),
+        col_moneda("costo", "Costo unitario", totalizar=False),
+        col_moneda("valor", "Valor de la pérdida"),
+        columna("estado", "Estado", ancho=1.0),
+        columna("descripcion", "Descripción", ancho=2.0),
+    ]
+    campos_detalle += [
+        Producto.codigoSKU,
+        Producto.nombre,
+        TipoDanio.nombre,
+        MercanciaDanada.cantidad,
+        MercanciaDanada.costoUnitario,
+        MercanciaDanada.valorPerdida,
+        MercanciaDanada.estado,
+        MercanciaDanada.descripcion,
+    ]
+    filas_detalle = [
+        list(fila) for fila in db.session.execute(
+            alcance.filtrar(
+                select(*campos_detalle)
+                .join(Producto, Producto.idProducto == MercanciaDanada.idProducto)
+                .join(TipoDanio, TipoDanio.idTipoDanio == MercanciaDanada.idTipoDanio)
+                .join(Sucursal, Sucursal.idSucursal == MercanciaDanada.idSucursal)
+                .where(filtro)
+                .order_by(MercanciaDanada.fecha.desc(), MercanciaDanada.idMercanciaDanada.desc())
+                .limit(_limite_detalle(limite)),
+                MercanciaDanada.idSucursal,
+            )
+        ).all()
+    ]
+    secciones.append(seccion(
+        f"Detalle de mercancía dañada ({len(filas_detalle)} de {total_registros})",
+        columnas_detalle,
+        filas_detalle,
+        nota="El valor usa el costo unitario congelado cuando se registró el daño.",
+    ))
+
+    return _base(
+        "mercancia-danada",
+        alcance,
+        desde,
+        hasta,
+        secciones,
+        [
+            kpi("Valor de la pérdida", float(valor_total)),
+            kpi("Registros de mercancía dañada", total_registros, tipo="entero"),
+            kpi("Unidades afectadas", float(unidades), tipo="decimal"),
+        ],
+        filtros={
+            "idProducto": idProducto,
+            "idTipoDanio": idTipoDanio,
+            "estado": estado,
+            "buscar": buscar,
+            "limite": limite,
+        },
+    )
+
+
 # =========================================================================== 6. CONSOLIDADO POR SUCURSAL
 def reporte_consolidado_sucursales(db, alcance, desde, hasta) -> dict:
     """
@@ -1980,6 +2185,7 @@ IMPLEMENTACIONES: dict[str, Any] = {
     "devoluciones": reporte_devoluciones,
     "ventas-por-producto": reporte_ventas_por_producto,
     "inventario-existencias": reporte_inventario_existencias,
+    "mercancia-danada": reporte_mercancia_danada,
     "consolidado-sucursales": reporte_consolidado_sucursales,
     "compras": reporte_compras,
 }

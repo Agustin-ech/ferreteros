@@ -31,6 +31,7 @@ REPORTES = [
     "devoluciones",
     "ventas-por-producto",
     "inventario-existencias",
+    "mercancia-danada",
     "consolidado-sucursales",
     "compras",
 ]
@@ -38,7 +39,10 @@ REPORTES = [
 
 @pytest.fixture(scope="module")
 def app():
-    return crear_app_con_datos()
+    application = crear_app_con_datos()
+    from tests.app_pruebas import preparar_mercancia_danada
+    preparar_mercancia_danada(application)
+    return application
 
 
 @pytest.fixture(scope="module")

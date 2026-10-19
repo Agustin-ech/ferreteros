@@ -11,6 +11,7 @@ const PAGINAS_REPORTE = {
   'consolidado-sucursales': 'reporte-consolidado',
   'ingresos-egresos': 'reporte-financiero',
   compras: 'reporte-compras',
+  'mercancia-danada': 'reporte-mercancia-danada',
 }
 
 const ICONOS_REPORTE = {
@@ -22,6 +23,7 @@ const ICONOS_REPORTE = {
   'consolidado-sucursales': Store,
   'ingresos-egresos': DollarSign,
   compras: Truck,
+  'mercancia-danada': Package,
 }
 
 export default function Reportes({ onNavigate }) {
@@ -115,7 +117,7 @@ export default function Reportes({ onNavigate }) {
             </div>
           </section>
 
-          <section>
+          {reportesPendientes.length > 0 && <section>
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">En preparación</h2>
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {reportesPendientes.map((reporte) => (
@@ -124,14 +126,8 @@ export default function Reportes({ onNavigate }) {
                   <p className="text-xs text-gray-500 mt-2">{reporte.requiere}</p>
                 </article>
               ))}
-              <article className="bg-panel-card/60 border border-panel-border rounded-xl p-4">
-                <p className="font-semibold text-gray-300 text-sm">Reporte de empleados</p>
-                <p className="text-xs text-gray-500 mt-2">
-                  No hay API de reportes de personal ni de asistencia disponible todavía.
-                </p>
-              </article>
             </div>
-          </section>
+          </section>}
         </>
       )}
     </div>

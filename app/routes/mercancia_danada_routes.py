@@ -43,8 +43,9 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from marshmallow import EXCLUDE, Schema, ValidationError, fields, validate
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, exists, func, or_, select
 
 from app.errors.negocio import ConflictoNegocio, DatosInvalidos, RecursoNoEncontrado
 from app.extensions import db
@@ -67,6 +68,7 @@ from app.services.reporte_service import (
     resolver_alcance,
     validar_periodo,
 )
+from app.utils.decorators import requiere_rol
 
 mercancia_danada_bp = Blueprint("mercancia_danada", __name__, url_prefix="/api/v1/mercancia-danada")
 
@@ -103,7 +105,7 @@ class RegistroDanioSchema(_Base):
 
     idProducto = fields.Int(required=True, validate=validate.Range(min=1))
     idSucursal = fields.Int(required=True, validate=validate.Range(min=1))
-    idUsuario = fields.Int(required=True, validate=validate.Range(min=1))
+    idUsuario = fields.Int(required=False, validate=validate.Range(min=1))
     idTipoDanio = fields.Int(required=True, validate=validate.Range(min=1))
     cantidad = fields.Decimal(required=True, as_string=False,
                               validate=validate.Range(min=Decimal("0.001")))
@@ -138,6 +140,7 @@ def serializar(registro: MercanciaDanada, *, producto=None, sucursal=None, tipo=
     """Registro + nombres legibles (evita que el front tenga que resolver cada id)."""
     datos = registro.to_dict()
     datos["producto"] = getattr(producto or registro.producto, "nombre", None)
+    datos["codigo"] = getattr(producto or registro.producto, "codigoSKU", None)
     datos["sucursal"] = getattr(sucursal or registro.sucursal, "nombreSucursal", None)
     datos["tipoDanio"] = getattr(tipo or registro.tipo_danio, "nombre", None)
     return datos
@@ -204,8 +207,15 @@ def registrar(datos: dict) -> MercanciaDanada:
 
     try:
         if descontar:
-            ajustar_inventario(db, registro.idProducto, id_sucursal, -cantidad,
-                               motivo="registro de mercancía dañada")
+            ajuste = ajustar_inventario(
+                db,
+                registro.idProducto,
+                id_sucursal,
+                -cantidad,
+                id_usuario=datos["idUsuario"],
+                motivo="registro de mercancía dañada",
+            )
+            registro.idAjusteInventario = ajuste.idAjusteInventario
         db.session.add(registro)
         db.session.commit()
     except Exception:
@@ -238,8 +248,16 @@ def cambiar_estado(id_registro: int, nuevo: str, observacion: str | None = None)
     try:
         # Solo se devuelve el inventario si realmente se había descontado.
         if nuevo in ESTADOS_QUE_DEVUELVEN_INVENTARIO and registro.descontadoDeInventario:
-            ajustar_inventario(db, registro.idProducto, registro.idSucursal, dec(registro.cantidad),
-                               crear_si_falta=True, motivo=f"mercancía dañada: {nuevo.lower()}")
+            ajuste = ajustar_inventario(
+                db,
+                registro.idProducto,
+                registro.idSucursal,
+                dec(registro.cantidad),
+                id_usuario=registro.idUsuario,
+                crear_si_falta=True,
+                motivo=f"mercancía dañada: {nuevo.lower()}",
+            )
+            registro.idAjusteReversion = ajuste.idAjusteInventario
             registro.descontadoDeInventario = False
 
         registro.estado = nuevo
@@ -297,10 +315,23 @@ def _condiciones(args, alcance) -> list:
     if args.get("buscar"):
         Producto = modelo("Producto")
         termino = args["buscar"]
+        producto_coincide = exists(
+            select(1).select_from(Producto).where(
+                Producto.idProducto == MercanciaDanada.idProducto,
+                or_(
+                    buscar_ilike(Producto.nombre, termino),
+                    buscar_ilike(Producto.codigoSKU, termino),
+                ),
+            ).correlate(MercanciaDanada)
+        )
+        tipo_coincide = exists(
+            select(1).select_from(TipoDanio).where(
+                TipoDanio.idTipoDanio == MercanciaDanada.idTipoDanio,
+                buscar_ilike(TipoDanio.nombre, termino),
+            ).correlate(MercanciaDanada)
+        )
         criterios = [buscar_ilike(MercanciaDanada.descripcion, termino),
-                     buscar_ilike(Producto.nombre, termino)]
-        if hasattr(Producto, "codigo"):
-            criterios.append(buscar_ilike(Producto.codigo, termino))
+                     producto_coincide, tipo_coincide]
         condiciones.append(or_(*[c for c in criterios if c is not None]))
 
     return condiciones, desde, hasta
@@ -318,6 +349,8 @@ def _entero(valor, nombre: str) -> int:
 # =============================================================================
 
 @mercancia_danada_bp.get("/tipos-danio")
+@jwt_required()
+@requiere_rol("admin", "bodega")
 def listar_tipos_danio():
     """Catálogo de motivos de daño (alimenta el selector del formulario de bodega)."""
     tipos = db.session.execute(
@@ -327,6 +360,8 @@ def listar_tipos_danio():
 
 
 @mercancia_danada_bp.post("/tipos-danio")
+@jwt_required()
+@requiere_rol("admin")
 def crear_tipo_danio():
     datos = TipoDanioSchema().load(request.get_json(silent=True) or {})
     existente = db.session.execute(
@@ -343,9 +378,12 @@ def crear_tipo_danio():
 
 @mercancia_danada_bp.post("")
 @mercancia_danada_bp.post("/")
+@jwt_required()
+@requiere_rol("admin", "bodega")
 def registrar_mercancia_danada():
     """Registra productos en mal estado y descuenta el inventario."""
     datos = RegistroDanioSchema().load(request.get_json(silent=True) or {})
+    datos["idUsuario"] = int(get_jwt_identity())
     registro = registrar(datos)
     cuerpo = serializar(registro)
     cuerpo["existenciasRestantes"] = float(existencias(db, registro.idProducto, registro.idSucursal))
@@ -354,6 +392,8 @@ def registrar_mercancia_danada():
 
 @mercancia_danada_bp.get("")
 @mercancia_danada_bp.get("/")
+@jwt_required()
+@requiere_rol("admin", "bodega")
 def listar_mercancia_danada():
     """
     Listado con filtros y paginación.
@@ -408,6 +448,8 @@ def listar_mercancia_danada():
 
 
 @mercancia_danada_bp.get("/resumen")
+@jwt_required()
+@requiere_rol("admin", "bodega")
 def resumen_mercancia_danada():
     """Unidades y valor de la mercancía afectada: por motivo, por sucursal y por producto."""
     Producto = modelo("Producto")
@@ -475,6 +517,8 @@ def resumen_mercancia_danada():
 
 
 @mercancia_danada_bp.get("/<int:id_registro>")
+@jwt_required()
+@requiere_rol("admin", "bodega")
 def obtener_mercancia_danada(id_registro: int):
     registro = _obtener(id_registro)
     cuerpo = serializar(registro)
@@ -484,6 +528,8 @@ def obtener_mercancia_danada(id_registro: int):
 
 
 @mercancia_danada_bp.patch("/<int:id_registro>/estado")
+@jwt_required()
+@requiere_rol("admin", "bodega")
 def cambiar_estado_mercancia_danada(id_registro: int):
     """Dar de baja, reclamar al proveedor, marcar como recuperada o anular."""
     datos = CambioEstadoSchema().load(request.get_json(silent=True) or {})
@@ -494,6 +540,8 @@ def cambiar_estado_mercancia_danada(id_registro: int):
 
 
 @mercancia_danada_bp.delete("/<int:id_registro>")
+@jwt_required()
+@requiere_rol("admin", "bodega")
 def anular_mercancia_danada(id_registro: int):
     """Anula el registro (error de digitación) y devuelve las unidades al inventario."""
     registro = cambiar_estado(id_registro, ESTADO_ANULADA,

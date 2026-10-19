@@ -35,9 +35,9 @@ export default function FacturaDetalle({ factura, onVolver }) {
           </button>
           <button
             type="button"
-            disabled
-            title="La descarga estará disponible próximamente."
-            className="flex items-center gap-2 bg-brand-yellow text-panel-sidebar font-semibold text-sm rounded-lg px-4 py-2 opacity-60 cursor-not-allowed"
+            onClick={() => window.print()}
+            title="Elige «Guardar como PDF» en el diálogo de impresión."
+            className="flex items-center gap-2 bg-brand-yellow text-panel-sidebar font-semibold text-sm rounded-lg px-4 py-2 hover:brightness-95 transition"
           >
             <Download size={15} /> Descargar PDF
           </button>

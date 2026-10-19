@@ -18,12 +18,14 @@ from app.schemas.inventario_schema import (
 )
 from app.services.inventario_service import InventarioService
 from app.utils.decorators import requiere_rol
+from app.utils.roles import normalizar_rol, sucursal_autorizada
 
 inventario_bp = Blueprint('inventario_bp', __name__, url_prefix='/api/inventario')
 
 # a. GET /api/inventario?sucursal=<id> (Administrador: cualquier sucursal; Bodega: solo la suya)
 @inventario_bp.route('', methods=['GET'])
 @jwt_required()
+@requiere_rol('admin', 'bodega', 'vendedor')
 def consultar_existencias():
     # Obtener el parámetro de la URL si existe
     id_sucursal = request.args.get('sucursal', type=int)
@@ -31,11 +33,16 @@ def consultar_existencias():
         return jsonify({"mensaje": "El parámetro sucursal debe ser un entero."}), 400
 
     claims = get_jwt()
-    if claims.get("rol") == "bodega":
-        sucursal_usuario = claims.get("idSucursal")
-        if id_sucursal is not None and id_sucursal != sucursal_usuario:
-            return jsonify({"mensaje": "Bodega solo puede consultar inventario de su sucursal."}), 403
-        id_sucursal = sucursal_usuario
+    rol = normalizar_rol(claims.get("rol"))
+    sucursal_usuario = claims.get("idSucursal")
+    if rol != "admin":
+        if sucursal_usuario is None:
+            return jsonify({"mensaje": "El usuario no tiene una sucursal asignada."}), 403
+        if id_sucursal is not None and not sucursal_autorizada(
+            rol, sucursal_usuario, id_sucursal
+        ):
+            return jsonify({"mensaje": "No puede consultar inventario de otra sucursal."}), 403
+        id_sucursal = int(sucursal_usuario)
 
     consulta = Inventario.query.options(joinedload(Inventario.producto))
     if id_sucursal:
@@ -51,7 +58,7 @@ def consultar_existencias():
     return jsonify(resultados), 200
 
 
-# b. POST /api/inventario/ajustar (Administrador: cualquier sucursal; Bodega: solo la suya)
+# b. POST /api/inventario/ajustar (Administrador o bodega)
 @inventario_bp.route('/ajustar', methods=['POST'])
 @jwt_required()
 @requiere_rol('admin', 'bodega')
@@ -66,8 +73,12 @@ def ajustar_inventario():
         return jsonify({"mensaje": "Datos de ajuste inválidos.", "errores": error.messages}), 400
 
     claims = get_jwt()
-    if claims.get("rol") == "bodega" and data["idSucursal"] != claims.get("idSucursal"):
-        return jsonify({"mensaje": "Bodega solo puede ajustar inventario de su sucursal."}), 403
+    if not sucursal_autorizada(
+        normalizar_rol(claims.get("rol")),
+        claims.get("idSucursal"),
+        data["idSucursal"],
+    ):
+        return jsonify({"mensaje": "No puede ajustar inventario de otra sucursal."}), 403
 
     try:
         nuevo_registro = InventarioService.actualizar_existencias(

@@ -6,6 +6,7 @@ import StatCard from './StatCard'
 import FacturaDetalle from './FacturaDetalle'
 import api from '../api/client'
 import { normalizarFacturaParaDetalle, obtenerNombreClientePorId } from '../api/ventas'
+import { exportarReporte } from '../api/reportes'
 
 const formatoCOP = new Intl.NumberFormat('es-CO', {
   style: 'currency',
@@ -17,6 +18,12 @@ function parseFecha(str) {
   const [d, m, y] = String(str || '').split('/').map(Number)
   if (!d || !m || !y) return null
   return new Date(y, m - 1, d)
+}
+
+function fechaISO(fecha) {
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0')
+  const dia = String(fecha.getDate()).padStart(2, '0')
+  return `${fecha.getFullYear()}-${mes}-${dia}`
 }
 
 export default function FacturasLista({
@@ -41,6 +48,8 @@ export default function FacturasLista({
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
   const [pagina, setPagina] = useState(1)
+  const [exportando, setExportando] = useState(false)
+  const [errorExportar, setErrorExportar] = useState('')
 
   const filas = useMemo(() => {
     let resultado = facturas
@@ -58,8 +67,10 @@ export default function FacturasLista({
     if (estadoFiltro !== 'Todos los estados') {
       resultado = resultado.filter((factura) => factura.estado === estadoFiltro)
     }
-    if (desde) resultado = resultado.filter((factura) => parseFecha(factura.fecha) >= new Date(desde))
-    if (hasta) resultado = resultado.filter((factura) => parseFecha(factura.fecha) <= new Date(hasta))
+    // `${dia}T00:00:00` se interpreta en hora local, igual que parseFecha;
+    // new Date('aaaa-mm-dd') sería medianoche UTC y dejaría fuera el día "hasta".
+    if (desde) resultado = resultado.filter((factura) => parseFecha(factura.fecha) >= new Date(`${desde}T00:00:00`))
+    if (hasta) resultado = resultado.filter((factura) => parseFecha(factura.fecha) <= new Date(`${hasta}T00:00:00`))
     return resultado
   }, [facturas, busqueda, sucursal, estadoFiltro, desde, hasta])
 
@@ -97,6 +108,44 @@ export default function FacturasLista({
     return (valor) => {
       setter(valor)
       setPagina(1)
+    }
+  }
+
+  // Exporta el reporte de facturación del backend en PDF con el mismo
+  // alcance que los filtros de la lista. Sin fechas elegidas se usa el rango
+  // de las facturas visibles (el backend, si no, tomaría solo el mes en curso).
+  async function exportarPDF() {
+    setExportando(true)
+    setErrorExportar('')
+    try {
+      const params = {}
+      const fechas = filas.map((factura) => parseFecha(factura.fecha)).filter(Boolean)
+      const masAntigua = fechas.length ? new Date(Math.min(...fechas.map((f) => f.getTime()))) : null
+      const masReciente = fechas.length ? new Date(Math.max(...fechas.map((f) => f.getTime()))) : null
+      const fechaDesde = desde || (masAntigua && fechaISO(masAntigua))
+      const fechaHasta = hasta || (masReciente && fechaISO(masReciente))
+      if (fechaDesde) params.desde = fechaDesde
+      if (fechaHasta) params.hasta = fechaHasta
+
+      const nombreSucursal = sucursalFija ?? sucursal
+      if (nombreSucursal !== 'Todas las sucursales') {
+        const encontrada = sucursales.find((item) => item.nombreSucursal === nombreSucursal)
+        if (encontrada) params.sucursal_id = encontrada.idSucursal
+      }
+
+      await exportarReporte('facturas', params, 'pdf')
+    } catch (error) {
+      let mensaje = error?.response?.data?.mensaje || error?.response?.data?.error
+      // Con responseType 'blob' el cuerpo del error llega como Blob.
+      if (!mensaje && error?.response?.data instanceof Blob) {
+        try {
+          const cuerpo = JSON.parse(await error.response.data.text())
+          mensaje = cuerpo?.mensaje || cuerpo?.error
+        } catch { /* cuerpo no JSON */ }
+      }
+      setErrorExportar(mensaje || 'No se pudo exportar las facturas en PDF. Intenta de nuevo.')
+    } finally {
+      setExportando(false)
     }
   }
 
@@ -149,6 +198,7 @@ export default function FacturasLista({
 
       {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
       {errorDetalle && <p role="alert" className="text-sm text-red-400">{errorDetalle}</p>}
+      {errorExportar && <p role="alert" className="text-sm text-red-400">{errorExportar}</p>}
 
       {mostrarResumen && (
         <section className="flex flex-col gap-3" aria-label="Resumen de facturación por sucursal">
@@ -223,11 +273,11 @@ export default function FacturasLista({
         {botonAccion === 'exportar' && (
           <button
             type="button"
-            disabled
-            title="La exportación de facturas estará disponible próximamente."
-            className="ml-auto flex items-center gap-2 bg-brand-yellow text-panel-sidebar font-semibold text-sm rounded-lg px-4 py-2 opacity-60 cursor-not-allowed whitespace-nowrap"
+            onClick={exportarPDF}
+            disabled={exportando || cargando}
+            className="ml-auto flex items-center gap-2 bg-brand-yellow text-panel-sidebar font-semibold text-sm rounded-lg px-4 py-2 hover:brightness-95 transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           >
-            <Download size={16} /> Exportar
+            <Download size={16} /> {exportando ? 'Exportando…' : 'Exportar PDF'}
           </button>
         )}
       </div>

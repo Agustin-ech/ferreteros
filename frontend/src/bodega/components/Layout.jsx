@@ -1,5 +1,6 @@
 import { Home, Truck, Package, BarChart3, TriangleAlert, History } from "lucide-react";
 import RoleLayout from "../../components/RoleLayout.jsx";
+import { useBodega } from "../store.jsx";
 
 // Cada "page" es la clave que usa BodegaApp.jsx para elegir la página.
 const navigation = [
@@ -21,9 +22,12 @@ const navigation = [
 ];
 
 export default function Layout({ activePage, onNavigate, onLogout, children }) {
+  const { cargando, nombreSucursal } = useBodega();
+
   return (
     <RoleLayout
       roleName="Personal de Bodega"
+      localName={cargando ? "Cargando..." : nombreSucursal || "Sin sucursal asignada"}
       navigation={navigation}
       activePage={activePage}
       onNavigate={onNavigate}

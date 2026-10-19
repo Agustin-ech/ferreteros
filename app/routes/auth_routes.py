@@ -3,6 +3,7 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 from marshmallow import ValidationError
 from app.models.usuario import Usuario
 from app.schemas.usuario_schema import login_schema, usuario_schema
+from app.utils.roles import normalizar_rol
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -31,13 +32,21 @@ def login():
     if not usuario.activo:
         return jsonify({"mensaje": "El usuario se encuentra inactivo"}), 403
 
-    rol = usuario.tipo_usuario.nombre.lower()
-    if rol == "administrador":
-        rol = "admin"
-    id_sucursal = next(
-        (asignacion.idSucursal for asignacion in usuario.sucursales if asignacion.activo),
-        None,
+    rol = normalizar_rol(usuario.tipo_usuario.nombre)
+    if rol is None:
+        return jsonify({"mensaje": "El rol del usuario no está soportado."}), 403
+
+    sucursales_activas = sorted(
+        (
+            asignacion
+            for asignacion in usuario.sucursales
+            if asignacion.activo and asignacion.sucursal and asignacion.sucursal.activa
+        ),
+        key=lambda asignacion: asignacion.idSucursal,
     )
+    id_sucursal = sucursales_activas[0].idSucursal if sucursales_activas else None
+    if rol != "admin" and id_sucursal is None:
+        return jsonify({"mensaje": "El usuario no tiene una sucursal activa asignada."}), 403
 
     # 5. Generar token JWT con identity (idUsuario) y claims con rol/sucursal
     access_token = create_access_token(

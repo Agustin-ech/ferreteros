@@ -24,6 +24,9 @@ export default function Inicio({
   errorVentas = '',
   errorSucursales = '',
   sucursales = [],
+  empleados = [],
+  cargandoPersonal = false,
+  onNavigate,
 }) {
   const [productos, setProductos] = useState([])
   const [inventario, setInventario] = useState([])
@@ -179,7 +182,11 @@ export default function Inicio({
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <InventoryBySucursal sucursales={sucursalesParaMostrar} />
         <StockAlerts alertasStock={stockAlerts.slice(0, 6)} />
-        <EmployeeSummary />
+        <EmployeeSummary
+          empleados={empleados}
+          cargando={cargandoPersonal}
+          onVerEmpleados={onNavigate ? () => onNavigate('empleados') : undefined}
+        />
       </div>
 
       {/* Tercera fila: gráfico y facturas */}

@@ -1,4 +1,5 @@
 from marshmallow import Schema, fields, validate, validates, ValidationError
+from app.utils.roles import normalizar_rol
 
 class LoginSchema(Schema):
 
@@ -50,23 +51,21 @@ class LoginSchema(Schema):
 
 class UsuarioSchema(Schema):
     idUsuario = fields.Int(dump_only=True)
+    idTipoDocumento = fields.Int(dump_only=True)
+    numeroDocumento = fields.Str(dump_only=True)
+    primerNombre = fields.Str(dump_only=True)
+    segundoNombre = fields.Str(dump_only=True, allow_none=True)
+    primerApellido = fields.Str(dump_only=True)
+    segundoApellido = fields.Str(dump_only=True, allow_none=True)
     nombre = fields.Method("nombre_completo", dump_only=True)
+    correoElectronico = fields.Str(dump_only=True)
+    telefono = fields.Str(dump_only=True, allow_none=True)
+    idTipoUsuario = fields.Int(dump_only=True)
     rol = fields.Method("rol_nombre", dump_only=True)
     idSucursal = fields.Method("sucursal_id", dump_only=True)
     sucursal = fields.Method("sucursal_nombre", dump_only=True)
+    permisos = fields.Method("permisos_rol", dump_only=True)
     activo = fields.Bool(dump_only=True)
-    idTipoDocumento = fields.Int()
-    tipoDocumento = fields.Method("tipo_documento_nombre", dump_only=True)
-    numeroDocumento = fields.Str()
-    primerNombre = fields.Str()
-    segundoNombre = fields.Str(allow_none=True)
-    primerApellido = fields.Str()
-    segundoApellido = fields.Str(allow_none=True)
-    correoElectronico = fields.Str()
-    telefono = fields.Str(allow_none=True)
-    idTipoUsuario = fields.Int()
-    fecha_creacion = fields.DateTime()
-    ultimo_login = fields.DateTime(allow_none=True)
 
     def nombre_completo(self, usuario):
         return " ".join(
@@ -81,65 +80,37 @@ class UsuarioSchema(Schema):
         )
 
     def rol_nombre(self, usuario):
-        rol = usuario.tipo_usuario.nombre.strip().lower()
-        return "admin" if rol == "administrador" else rol
+        return normalizar_rol(usuario.tipo_usuario.nombre)
 
     def sucursal_id(self, usuario):
-        asignacion = self._asignacion_activa(usuario)
-        return asignacion.idSucursal if asignacion else None
+        asignaciones = self._sucursales_activas(usuario)
+        return asignaciones[0].idSucursal if asignaciones else None
 
     def sucursal_nombre(self, usuario):
-        asignacion = self._asignacion_activa(usuario)
-        return asignacion.sucursal.nombreSucursal if asignacion and asignacion.sucursal else None
+        asignaciones = self._sucursales_activas(usuario)
+        return asignaciones[0].sucursal.nombreSucursal if asignaciones else None
 
-    def tipo_documento_nombre(self, usuario):
-        return usuario.tipo_documento.nombre if usuario.tipo_documento else None
+    def permisos_rol(self, usuario):
+        return sorted(
+            (
+                asignacion.funcion.nombre
+                for asignacion in usuario.tipo_usuario.funciones
+                if asignacion.funcion and asignacion.funcion.activo
+            ),
+            key=str.casefold,
+        )
 
-    @staticmethod
-    def _asignacion_activa(usuario):
-        asignaciones = sorted(
-            (asignacion for asignacion in usuario.sucursales if asignacion.activo),
+    def _sucursales_activas(self, usuario):
+        return sorted(
+            (
+                asignacion
+                for asignacion in usuario.sucursales
+                if asignacion.activo and asignacion.sucursal and asignacion.sucursal.activa
+            ),
             key=lambda asignacion: asignacion.idSucursal,
         )
-        return asignaciones[0] if asignaciones else None
-
-
-class UsuarioCreateSchema(Schema):
-    idTipoDocumento = fields.Int(required=True, validate=validate.Range(min=1))
-    numeroDocumento = fields.Str(required=True, validate=validate.Length(min=1, max=20))
-    primerNombre = fields.Str(required=True, validate=validate.Length(min=1, max=150))
-    segundoNombre = fields.Str(allow_none=True, load_default=None, validate=validate.Length(max=150))
-    primerApellido = fields.Str(required=True, validate=validate.Length(min=1, max=150))
-    segundoApellido = fields.Str(allow_none=True, load_default=None, validate=validate.Length(max=150))
-    correoElectronico = fields.Email(required=True, validate=validate.Length(max=150))
-    telefono = fields.Str(allow_none=True, load_default=None, validate=validate.Length(max=20))
-    idTipoUsuario = fields.Int(required=True, validate=validate.Range(min=1))
-    idSucursal = fields.Int(allow_none=True, load_default=None, validate=validate.Range(min=1))
-    password = fields.Str(
-        required=True,
-        load_only=True,
-        validate=validate.Length(min=12, max=255),
-        error_messages={"required": "La contraseña temporal es obligatoria."},
-    )
-
-
-class UsuarioUpdateSchema(Schema):
-    idTipoDocumento = fields.Int(validate=validate.Range(min=1))
-    numeroDocumento = fields.Str(validate=validate.Length(min=1, max=20))
-    primerNombre = fields.Str(validate=validate.Length(min=1, max=150))
-    segundoNombre = fields.Str(allow_none=True, validate=validate.Length(max=150))
-    primerApellido = fields.Str(validate=validate.Length(min=1, max=150))
-    segundoApellido = fields.Str(allow_none=True, validate=validate.Length(max=150))
-    correoElectronico = fields.Email(validate=validate.Length(max=150))
-    telefono = fields.Str(allow_none=True, validate=validate.Length(max=20))
-    idTipoUsuario = fields.Int(validate=validate.Range(min=1))
-    idSucursal = fields.Int(allow_none=True, validate=validate.Range(min=1))
-    activo = fields.Bool()
-
 
 # Instancias listas para usar en las rutas, evitando crear un Schema()
 # nuevo cada vez que se necesita validar o serializar.
 login_schema = LoginSchema()
 usuario_schema = UsuarioSchema()
-usuario_create_schema = UsuarioCreateSchema()
-usuario_update_schema = UsuarioUpdateSchema()

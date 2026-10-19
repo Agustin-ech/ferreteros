@@ -74,12 +74,15 @@ export async function listarVentas() {
   const primera = leerPaginaVentas(primeraPagina, 1)
   const ventas = [...primera.ventas]
 
-  for (let pagina = 2; pagina <= primera.paginas; pagina += 1) {
-    const respuesta = await api.get('/api/ventas', {
-      params: { pagina, por_pagina: porPagina },
-    })
-    ventas.push(...leerPaginaVentas(respuesta, pagina).ventas)
-  }
+  // Las páginas restantes se piden en paralelo: en serie, con ~1,5 s por
+  // página, 800 ventas tardaban más de 10 s en cargar.
+  const restantes = Array.from({ length: primera.paginas - 1 }, (_, i) => i + 2)
+  const respuestas = await Promise.all(restantes.map((pagina) => api.get('/api/ventas', {
+    params: { pagina, por_pagina: porPagina },
+  })))
+  respuestas.forEach((respuesta, i) => {
+    ventas.push(...leerPaginaVentas(respuesta, restantes[i]).ventas)
+  })
   const ventasActivas = ventas.filter((venta) => venta.activo !== false)
   let ventasConNombresVendedor = ventasActivas
   let errorNombres = ''

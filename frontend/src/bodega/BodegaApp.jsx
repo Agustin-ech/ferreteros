@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BodegaProvider } from "./store.jsx";
+import { BodegaProvider, useBodega } from "./store.jsx";
 import Layout from "./components/Layout.jsx";
 import Inicio from "./pages/Inicio.jsx";
 import RegistrarProducto from "./pages/RegistrarProducto.jsx";
@@ -11,10 +11,6 @@ import ConsultarDanados from "./pages/ConsultarDanados.jsx";
 import MercanciaRecibida from "./pages/MercanciaRecibida.jsx";
 import Kardex from "./pages/Kardex.jsx";
 
-// Panel de Bodega. Navega por estado (igual que el panel admin), sin
-// react-router, así no hay que instalar nada nuevo.
-// Los productos y el inventario se consultan en el backend; los registros de
-// mercancía dañada y recibida siguen siendo datos locales de la maqueta.
 const paginas = {
   inicio: Inicio,
   recibida: MercanciaRecibida,
@@ -27,6 +23,20 @@ const paginas = {
   "consultar-danados": ConsultarDanados,
 };
 
+function PaginaBodega({ Pagina, onNavigate }) {
+  const { cargando, error, recargar } = useBodega();
+  if (cargando) return <p role="status" className="text-sm text-gray-300">Cargando productos e inventario...</p>;
+  if (error) {
+    return (
+      <div role="alert" className="card">
+        <p className="text-sm text-red-400">{error}</p>
+        <button className="btn-primary mt-3" onClick={recargar}>Reintentar</button>
+      </div>
+    );
+  }
+  return <Pagina onNavigate={onNavigate} />;
+}
+
 export default function BodegaApp({ onLogout }) {
   const [activePage, setActivePage] = useState("inicio");
   const Pagina = paginas[activePage] ?? Inicio;
@@ -34,7 +44,7 @@ export default function BodegaApp({ onLogout }) {
   return (
     <BodegaProvider>
       <Layout activePage={activePage} onNavigate={setActivePage} onLogout={onLogout}>
-        <Pagina onNavigate={setActivePage} />
+        <PaginaBodega Pagina={Pagina} onNavigate={setActivePage} />
       </Layout>
     </BodegaProvider>
   );

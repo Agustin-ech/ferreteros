@@ -321,6 +321,109 @@ def test_bodega_no_puede_consultar_inventario_de_otra_sucursal(app):
 	assert response.status_code == 403
 
 
+def test_ajuste_route_allows_bodega_role(app):
+	db.session.add_all([
+		TipoMovimiento(idTipoMovimiento=1, nombre="Entrada"),
+		TipoMovimiento(idTipoMovimiento=2, nombre="Salida"),
+		TipoMovimiento(idTipoMovimiento=3, nombre="Ajuste"),
+	])
+	db.session.commit()
+
+	with app.app_context():
+		token = create_access_token(
+			identity="9",
+			additional_claims={"rol": "bodeguero", "idSucursal": 2},
+		)
+
+	response = app.test_client().post(
+		"/api/inventario/ajustar",
+		json={
+			"idProducto": 3,
+			"idSucursal": 2,
+			"cantidad": 1,
+			"operacion": "suma",
+			"motivo": "Ingreso de prueba",
+		},
+		headers={"Authorization": f"Bearer {token}"},
+	)
+
+	assert response.status_code == 200
+	assert response.json["inventario_actualizado"]["cantidadDisponible"] == 1
+
+
+def test_bodega_cannot_adjust_inventory_in_another_branch(app):
+	with app.app_context():
+		token = create_access_token(
+			identity="9",
+			additional_claims={"rol": "bodega", "idSucursal": 2},
+		)
+
+	response = app.test_client().post(
+		"/api/inventario/ajustar",
+		json={
+			"idProducto": 3,
+			"idSucursal": 1,
+			"cantidad": 1,
+			"operacion": "suma",
+			"motivo": "Ingreso de prueba",
+		},
+		headers={"Authorization": f"Bearer {token}"},
+	)
+
+	assert response.status_code == 403
+
+
+def test_bodega_only_reads_inventory_from_assigned_branch(app):
+	db.session.add_all([
+		Inventario(idProducto=3, idSucursal=1, CantidadDisponible=Decimal("4")),
+		Inventario(idProducto=4, idSucursal=2, CantidadDisponible=Decimal("7")),
+	])
+	db.session.commit()
+	with app.app_context():
+		token = create_access_token(
+			identity="9",
+			additional_claims={"rol": "bodega", "idSucursal": 2},
+		)
+
+	response = app.test_client().get(
+		"/api/inventario",
+		headers={"Authorization": f"Bearer {token}"},
+	)
+	otra_sucursal = app.test_client().get(
+		"/api/inventario?sucursal=1",
+		headers={"Authorization": f"Bearer {token}"},
+	)
+
+	assert response.status_code == 200
+	assert [item["idSucursal"] for item in response.json] == [2]
+	assert otra_sucursal.status_code == 403
+
+
+def test_usuario_de_inventario_sin_sucursal_no_puede_consultar(app):
+	with app.app_context():
+		token = create_access_token(
+			identity="9",
+			additional_claims={"rol": "vendedor"},
+		)
+
+	response = app.test_client().get(
+		"/api/inventario",
+		headers={"Authorization": f"Bearer {token}"},
+	)
+
+	assert response.status_code == 403
+
+
+@pytest.mark.parametrize(
+	("rol", "esperado"),
+	[("administrador", "admin"), (" BODEGUERO ", "bodega"), ("Vendedor", "vendedor")],
+)
+def test_roles_heredados_se_normalizan(rol, esperado):
+	from app.utils.roles import normalizar_rol
+
+	assert normalizar_rol(rol) == esperado
+
+
 def test_inventario_routes_are_registered_once(app):
 	rutas = [
 		rule.rule

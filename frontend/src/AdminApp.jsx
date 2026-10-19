@@ -1,21 +1,17 @@
 // Este archivo es el antiguo App.jsx del panel admin, renombrado a AdminApp.jsx.
 // Único cambio: recibe onLogout y se lo pasa al Header (botón "Cerrar sesión").
 // El nuevo App.jsx decide si mostrar el Login, este panel o el de Bodega.
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Sidebar from './components/Sidebar'
 import Header from './components/Header'
+import ApiState from './components/ApiState'
 import Inicio from './pages/Inicio'
 import InventarioGlobal from './pages/InventarioGlobal'
 import Kardex from './pages/Kardex'
 import InventarioSucursal from './pages/InventarioSucursal'
-import AjustesInventarioLaChinita from './pages/AjustesInventarioLaChinita'
-import AjustesInventarioBuenaVista from './pages/AjustesInventarioBuenaVista'
-import AlertaStockLaChinita from './pages/AlertaStockLaChinita'
-import AlertaStockBuenaVista from './pages/AlertaStockBuenaVista'
 import Facturas from './pages/Facturas'
 import TodasLasFacturas from './pages/TodasLasFacturas'
-import FacturasLaChinita from './pages/FacturasLaChinita'
-import FacturasBuenaVista from './pages/FacturasBuenaVista'
+import FacturasSucursal from './pages/FacturasSucursal'
 import Finanzas from './pages/Finanzas'
 import Ingresos from './pages/Ingresos'
 import Egresos from './pages/Egresos'
@@ -25,46 +21,55 @@ import ReporteVentas from './pages/ReporteVentas'
 import ReporteInventario from './pages/ReporteInventario'
 import ReporteFinanciero from './pages/ReporteFinanciero'
 import ReporteSucursal from './pages/ReporteSucursal'
-import ReporteEmpleados from './pages/ReporteEmpleados'
 import ReporteConsolidado from './pages/ReporteConsolidado'
 import ReporteFacturas from './pages/ReporteFacturas'
 import ReporteDevoluciones from './pages/ReporteDevoluciones'
 import ReporteProductos from './pages/ReporteProductos'
+import ReporteMercanciaDanada from './pages/ReporteMercanciaDanada'
 import Empleados from './pages/Empleados'
 import NuevoEmpleado from './pages/NuevoEmpleado'
 import RolesPermisos from './pages/RolesPermisos'
-import ControlAsistencia from './pages/ControlAsistencia'
-import NominaSalarios from './pages/NominaSalarios'
-import ConfiguracionEmpleados from './pages/ConfiguracionEmpleados'
 import PedidosProveedor from './pages/PedidosProveedor'
 import ReporteCompras from './pages/ReporteCompras'
 import api from './api/client'
-import {
-  actualizarEmpleado,
-  crearEmpleado,
-  listarEmpleados,
-  obtenerCatalogosEmpleados,
-} from './api/empleados'
+import { errorMessage } from './api/client'
 import { listarVentas, normalizarVenta } from './api/ventas'
-import {
-  roles as rolesIniciales,
-} from './data/mockData'
+
+const ETIQUETAS_ROL = { admin: 'Administrador', vendedor: 'Vendedor', bodega: 'Bodeguero' }
+
+function normalizarEmpleado(usuario) {
+  const etiquetaRol = ETIQUETAS_ROL[usuario.rol] || usuario.rol || ''
+  return {
+    ...usuario,
+    id: String(usuario.idUsuario),
+    nombre: usuario.nombre,
+    cedula: usuario.numeroDocumento,
+    correo: usuario.correoElectronico || '',
+    sucursal: usuario.sucursal || '',
+    rolSistema: etiquetaRol,
+    cargo: etiquetaRol,
+    estado: usuario.activo ? 'Activo' : 'Inactivo',
+  }
+}
+
+function normalizarRol(rol) {
+  return {
+    ...rol,
+    rol: ETIQUETAS_ROL[rol.rol] || rol.nombre,
+  }
+}
 
 // Mapa de página -> componente. Para agregar una página nueva, solo hay que
 // crear el componente en src/pages y agregarlo aquí con su misma clave de
-// "page" usada en menuItems (src/data/mockData.js).
+// "page" usada en menuItems (src/data/menu.js). Las páginas por sucursal
+// (inventario-sucursal-<id>, facturas-sucursal-<id>) se generan con las
+// sucursales que devuelve el backend.
 const paginas = {
   inicio: Inicio,
   'inventario-global': InventarioGlobal,
   kardex: Kardex,
-  'ajustes-inventario-la-chinita': AjustesInventarioLaChinita,
-  'ajustes-inventario-buena-vista': AjustesInventarioBuenaVista,
-  'alerta-stock-la-chinita': AlertaStockLaChinita,
-  'alerta-stock-buena-vista': AlertaStockBuenaVista,
   facturas: Facturas,
   'todas-las-facturas': TodasLasFacturas,
-  'facturas-la-chinita': FacturasLaChinita,
-  'facturas-buena-vista': FacturasBuenaVista,
   finanzas: Finanzas,
   ingresos: Ingresos,
   egresos: Egresos,
@@ -74,53 +79,77 @@ const paginas = {
   'reporte-inventario': ReporteInventario,
   'reporte-financiero': ReporteFinanciero,
   'reporte-sucursal': ReporteSucursal,
-  'reporte-empleados': ReporteEmpleados,
   'reporte-consolidado': ReporteConsolidado,
   'reporte-facturas': ReporteFacturas,
   'reporte-devoluciones': ReporteDevoluciones,
   'reporte-productos': ReporteProductos,
   'reporte-compras': ReporteCompras,
+  'reporte-mercancia-danada': ReporteMercanciaDanada,
   empleados: Empleados,
   'nuevo-empleado': NuevoEmpleado,
   'roles-permisos': RolesPermisos,
-  'control-asistencia': ControlAsistencia,
-  'nomina-salarios': NominaSalarios,
-  'configuracion-empleados': ConfiguracionEmpleados,
   'pedidos-proveedor': PedidosProveedor,
 }
 
 export default function AdminApp({ onLogout }) {
   const [activePage, setActivePage] = useState('inicio')
   const [sucursales, setSucursales] = useState([])
+  const [cargandoSucursales, setCargandoSucursales] = useState(true)
   const [errorSucursales, setErrorSucursales] = useState('')
+  const [empleadosState, setEmpleadosState] = useState([])
+  const [rolesState, setRolesState] = useState([])
+  const [funcionesState, setFuncionesState] = useState([])
+  const [catalogosPersonal, setCatalogosPersonal] = useState({
+    tiposDocumento: [],
+    roles: [],
+    sucursales: [],
+  })
+  const [cargandoPersonal, setCargandoPersonal] = useState(true)
+  const [errorPersonal, setErrorPersonal] = useState('')
+
+  const cargarSucursales = useCallback(async () => {
+    setCargandoSucursales(true)
+    setErrorSucursales('')
+    try {
+      const response = await api.get('/api/sucursales', { params: { solo_activas: true } })
+      setSucursales((response.data || []).filter((sucursal) => sucursal.activa !== false))
+    } catch (error) {
+      setErrorSucursales(errorMessage(error, 'No se pudieron cargar las sucursales.'))
+      setSucursales([])
+    } finally {
+      setCargandoSucursales(false)
+    }
+  }, [])
+
+  useEffect(() => { cargarSucursales() }, [cargarSucursales])
+
+  const cargarPersonal = useCallback(async () => {
+    setCargandoPersonal(true)
+    setErrorPersonal('')
+    try {
+      const [usuarios, catalogos, roles, funciones] = await Promise.all([
+        api.get('/api/usuarios'),
+        api.get('/api/usuarios/catalogos'),
+        api.get('/api/roles'),
+        api.get('/api/funciones'),
+      ])
+      setEmpleadosState((usuarios.data || []).map(normalizarEmpleado))
+      setCatalogosPersonal(catalogos.data)
+      setRolesState((roles.data || []).map(normalizarRol))
+      setFuncionesState(funciones.data || [])
+    } catch (error) {
+      setErrorPersonal(errorMessage(error, 'No se pudo cargar el personal y sus permisos.'))
+    } finally {
+      setCargandoPersonal(false)
+    }
+  }, [])
+
+  useEffect(() => { cargarPersonal() }, [cargarPersonal])
+
   const [ventas, setVentas] = useState([])
   const [ventasCargando, setVentasCargando] = useState(true)
   const [errorVentas, setErrorVentas] = useState('')
   const [productoParaBusqueda, setProductoParaBusqueda] = useState(null)
-  const [empleadosState, setEmpleadosState] = useState([])
-  const [catalogosEmpleados, setCatalogosEmpleados] = useState({
-    roles: [],
-    tiposDocumento: [],
-    sucursales: [],
-  })
-  const [empleadosCargando, setEmpleadosCargando] = useState(false)
-  const [errorEmpleados, setErrorEmpleados] = useState('')
-
-  useEffect(() => {
-    let cancelado = false
-    api.get('/api/sucursales', { params: { solo_activas: true } })
-      .then((response) => {
-        if (!cancelado) {
-          setSucursales((response.data || []).filter((sucursal) => sucursal.activa !== false))
-          setErrorSucursales('')
-        }
-      })
-      .catch(() => {
-        if (!cancelado) setErrorSucursales('No se pudieron cargar las sucursales desde el servidor.')
-      })
-
-    return () => { cancelado = true }
-  }, [])
 
   useEffect(() => {
     let cancelado = false
@@ -143,35 +172,6 @@ export default function AdminApp({ onLogout }) {
     return () => { cancelado = true }
   }, [])
 
-  useEffect(() => {
-    if (!['empleados', 'nuevo-empleado'].includes(activePage)) return undefined
-    let cancelado = false
-    setEmpleadosCargando(true)
-    setErrorEmpleados('')
-    Promise.all([listarEmpleados(), obtenerCatalogosEmpleados()])
-      .then(([empleados, catalogos]) => {
-        if (cancelado) return
-        setEmpleadosState(empleados)
-        setCatalogosEmpleados(catalogos)
-      })
-      .catch((error) => {
-        if (!cancelado) {
-          setErrorEmpleados(
-            error?.response?.data?.mensaje
-            || error?.response?.data?.error
-            || error.message
-            || 'No se pudieron cargar los empleados y sus catálogos.'
-          )
-        }
-      })
-      .finally(() => {
-        if (!cancelado) setEmpleadosCargando(false)
-      })
-    return () => { cancelado = true }
-  }, [activePage])
-
-  // Los roles siguen siendo locales mientras no exista su API de administración.
-  const [rolesState, setRolesState] = useState(rolesIniciales)
   const facturasState = useMemo(
     () => ventas
       .filter((venta) => venta.factura && venta.factura.activo !== false)
@@ -179,23 +179,68 @@ export default function AdminApp({ onLogout }) {
     [ventas, sucursales]
   )
 
+  // Las tres funciones de empleados lanzan el error para que cada pantalla
+  // lo muestre junto al formulario o la tabla que lo originó.
+  function reemplazarEmpleado(usuario) {
+    const actualizado = normalizarEmpleado(usuario)
+    setEmpleadosState((prev) => prev.map((empleado) => empleado.id === actualizado.id ? actualizado : empleado))
+    return actualizado
+  }
   async function agregarEmpleado(datos) {
-    const empleado = await crearEmpleado(datos)
+    const { data } = await api.post('/api/usuarios', datos)
+    const empleado = normalizarEmpleado(data.usuario)
     setEmpleadosState((prev) => [empleado, ...prev])
     setActivePage('empleados')
     return empleado
   }
-  async function editarEmpleado(id, cambios) {
-    const empleado = await actualizarEmpleado(id, cambios)
-    setEmpleadosState((prev) => prev.map((e) => (e.idUsuario === empleado.idUsuario ? empleado : e)))
-    return empleado
+  // `payload` ya viene con los campos que acepta PUT /api/usuarios/<id>.
+  async function editarEmpleado(id, payload) {
+    const { data } = await api.put(`/api/usuarios/${id}`, payload)
+    return reemplazarEmpleado(data)
+  }
+  async function eliminarEmpleado(id) {
+    const { data } = await api.delete(`/api/usuarios/${id}`)
+    return reemplazarEmpleado(data)
   }
 
-  function agregarRol(rol) {
-    setRolesState((prev) => [...prev, rol])
+  async function agregarRol(rol) {
+    setErrorPersonal('')
+    try {
+      const { data } = await api.post('/api/roles', {
+        nombre: rol.nombre,
+        descripcion: rol.descripcion,
+        idFunciones: rol.idFunciones,
+      })
+      const nuevoRol = normalizarRol(data)
+      setRolesState((prev) => [...prev, nuevoRol])
+      setCatalogosPersonal((prev) => ({
+        ...prev,
+        roles: [...prev.roles, {
+          idTipoUsuario: data.idTipoUsuario,
+          nombre: data.nombre,
+          rol: data.rol,
+        }],
+        rolesDisponibles: prev.rolesDisponibles.filter((item) => item.rol !== data.rol),
+      }))
+    } catch (error) {
+      setErrorPersonal(errorMessage(error, 'No se pudo crear el rol.'))
+      throw error
+    }
   }
-  function editarRol(nombreOriginal, cambios) {
-    setRolesState((prev) => prev.map((r) => (r.rol === nombreOriginal ? { ...r, ...cambios } : r)))
+  async function editarRol(idTipoUsuario, cambios) {
+    setErrorPersonal('')
+    try {
+      const { data } = await api.put(`/api/roles/${idTipoUsuario}`, {
+        descripcion: cambios.descripcion,
+        idFunciones: cambios.idFunciones,
+      })
+      setRolesState((prev) => prev.map((rol) =>
+        rol.idTipoUsuario === idTipoUsuario ? normalizarRol(data) : rol
+      ))
+    } catch (error) {
+      setErrorPersonal(errorMessage(error, 'No se pudieron actualizar los permisos del rol.'))
+      throw error
+    }
   }
 
   function abrirProductoDesdeBusqueda(producto) {
@@ -206,14 +251,15 @@ export default function AdminApp({ onLogout }) {
   const sucursalSeleccionada = activePage.startsWith('inventario-sucursal-')
     ? sucursales.find((sucursal) => `inventario-sucursal-${sucursal.idSucursal}` === activePage)
     : null
+  const sucursalFacturas = activePage.startsWith('facturas-sucursal-')
+    ? sucursales.find((sucursal) => `facturas-sucursal-${sucursal.idSucursal}` === activePage)
+    : null
   const PaginaActiva = paginas[activePage] ?? Inicio
-  const paginaEmpleados = ['empleados', 'nuevo-empleado'].includes(activePage)
   const errorDatos = errorVentas || errorSucursales
   const usarFacturasBackend = [
     'facturas',
     'todas-las-facturas',
-    'facturas-la-chinita',
-    'facturas-buena-vista',
+    ...(sucursalFacturas ? [activePage] : []),
     'ingresos',
   ].includes(activePage)
 
@@ -225,20 +271,54 @@ export default function AdminApp({ onLogout }) {
         <Header onLogout={onLogout} onSelectProduct={abrirProductoDesdeBusqueda} />
 
         <main className="flex-1 p-6 overflow-y-auto">
+          {['empleados', 'nuevo-empleado', 'roles-permisos'].includes(activePage) && (
+            <div className="mb-4">
+              <ApiState
+                loading={cargandoPersonal}
+                error={errorPersonal}
+                onRetry={cargarPersonal}
+                loadingMessage="Cargando personal y permisos..."
+              />
+            </div>
+          )}
+          {(cargandoSucursales || errorSucursales || sucursales.length === 0) && (
+            <div className="mb-4">
+              <ApiState
+                loading={cargandoSucursales}
+                error={errorSucursales}
+                empty={!cargandoSucursales && !errorSucursales && sucursales.length === 0}
+                onRetry={cargarSucursales}
+                loadingMessage="Cargando sucursales..."
+                emptyMessage="No hay sucursales activas disponibles para consultar su inventario."
+              />
+            </div>
+          )}
           {sucursalSeleccionada ? (
             <InventarioSucursal
               key={sucursalSeleccionada.idSucursal}
               idSucursal={sucursalSeleccionada.idSucursal}
               nombreSucursal={sucursalSeleccionada.nombreSucursal}
             />
+          ) : sucursalFacturas ? (
+            <FacturasSucursal
+              key={sucursalFacturas.idSucursal}
+              nombreSucursal={sucursalFacturas.nombreSucursal}
+              facturas={facturasState}
+              sucursales={sucursales}
+              ventasCargando={ventasCargando}
+              errorVentas={errorDatos}
+            />
           ) : <PaginaActiva
             onNavigate={setActivePage}
             empleados={empleadosState}
             onAgregarEmpleado={agregarEmpleado}
             onEditarEmpleado={editarEmpleado}
-            empleadosCargando={empleadosCargando}
-            errorEmpleados={errorEmpleados}
-            roles={paginaEmpleados ? catalogosEmpleados.roles : rolesState}
+            onEliminarEmpleado={eliminarEmpleado}
+            catalogosPersonal={catalogosPersonal}
+            cargandoPersonal={cargandoPersonal}
+            rolesDisponibles={catalogosPersonal.rolesDisponibles || []}
+            funciones={funcionesState}
+            roles={rolesState}
             onAgregarRol={agregarRol}
             onEditarRol={editarRol}
             facturas={usarFacturasBackend ? facturasState : undefined}
@@ -246,10 +326,7 @@ export default function AdminApp({ onLogout }) {
             ventasCargando={ventasCargando}
             errorVentas={errorDatos}
             errorSucursales={errorSucursales}
-            sucursales={paginaEmpleados ? catalogosEmpleados.sucursales : sucursales}
-            tiposDocumento={catalogosEmpleados.tiposDocumento}
-            cargando={paginaEmpleados && empleadosCargando}
-            errorCarga={paginaEmpleados ? errorEmpleados : ''}
+            sucursales={sucursales}
             productoParaBusqueda={activePage === 'inventario-global' ? productoParaBusqueda : null}
             onProductoAbierto={() => setProductoParaBusqueda(null)}
           />}

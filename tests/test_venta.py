@@ -12,9 +12,13 @@ from app.models.inventario import Inventario
 from app.models.metodo_pago import MetodoPago
 from app.models.producto import Producto
 from app.models.tipo_movimiento import TipoMovimiento
-from app.models.tipo_venta import TipoVenta
 from app.models.transaccion_inventario import TransaccionInventario
+from app.models.tipo_devolucion import TipoDevolucion
+from app.models.tipo_documento import TipoDeDocumento
+from app.models.tipo_usuario import TipoUsuario
+from app.models.tipo_venta import TipoVenta
 from app.models.usuario import Usuario
+from app.models.sucursal import Sucursal
 from app.models.venta import Venta
 from app.schemas.venta_schema import venta_input_schema, venta_output_schema
 from app.services.venta_service import VentaService
@@ -32,10 +36,14 @@ def app():
 	tables = [
 		Producto.__table__,
 		Inventario.__table__,
+		TipoDeDocumento.__table__,
+		TipoUsuario.__table__,
+		Sucursal.__table__,
+		Cliente.__table__,
+		Usuario.__table__,
 		TipoVenta.__table__,
 		MetodoPago.__table__,
-		Usuario.__table__,
-		Cliente.__table__,
+		TipoDevolucion.__table__,
 		Venta.__table__,
 		DetalleVenta.__table__,
 		Factura.__table__,
@@ -75,19 +83,43 @@ def app():
 			),
 			TipoVenta(idTipoVenta=1, nombre="Mostrador"),
 			MetodoPago(idMetodoPago=1, nombre="Efectivo"),
+			MetodoPago(idMetodoPago=2, nombre="Transferencia"),
 			TipoMovimiento(idTipoMovimiento=1, nombre="Entrada"),
 			TipoMovimiento(idTipoMovimiento=2, nombre="Salida"),
+			TipoDevolucion(idTipoDevolucion=1, nombre="Cambio"),
+			TipoDeDocumento(idTipoDocumento=1, Acronimo="CC", nombre="Cédula"),
+			TipoUsuario(idTipoUsuario=1, nombre="vendedor"),
+			Sucursal(
+				idSucursal=1,
+				nombreSucursal="Sucursal Prueba",
+				direccion="Calle 1 # 2-3",
+				barrio="Centro",
+				telefono="3001234567",
+			),
 			Usuario(
 				idUsuario=7,
 				idTipoDocumento=1,
-				numeroDocumento="TEST-7",
-				primerNombre="Ana",
-				segundoNombre="María",
-				primerApellido="Pérez",
-				segundoApellido="López",
-				correoElectronico="ana.perez@example.test",
+				numeroDocumento="789",
+				primerNombre="Vendedor",
+				primerApellido="Prueba",
+				correoElectronico="vendedor@example.test",
 				idTipoUsuario=1,
-				password_hash="not-used-in-tests",
+				password_hash="hash",
+			),
+			Cliente(
+				idCliente=1,
+				idTipoDocumento=1,
+				numeroDocumento="123",
+				primerNombre="Ana",
+				primerApellido="Prueba",
+			),
+			Cliente(
+				idCliente=2,
+				idTipoDocumento=1,
+				numeroDocumento="456",
+				primerNombre="Ana",
+				primerApellido="Inactiva",
+				activo=False,
 			),
 		])
 		db.session.commit()
@@ -138,7 +170,7 @@ def test_registrar_venta_persiste_modelos_y_descuenta_stock(app):
 		assert movimiento.stockNuevo == Decimal("8.50")
 		respuesta = venta_output_schema.dump(venta)
 		assert respuesta["detalles"][0]["nombreProducto"] == "Taladro"
-		assert respuesta["nombreVendedor"] == "Ana María Pérez López"
+		assert respuesta["nombreVendedor"] == "Vendedor Prueba"
 		assert respuesta["activo"] is True
 		assert respuesta["factura"]["activo"] is True
 
@@ -181,17 +213,6 @@ def test_endpoints_venta_post_lista_detalle_y_factura(app):
 	from flask_jwt_extended import create_access_token
 
 	with app.app_context():
-		cliente = Cliente(
-			idTipoDocumento=1,
-			numeroDocumento="CLIENTE-1",
-			primerNombre="Laura",
-			segundoNombre="María",
-			primerApellido="Gómez",
-			segundoApellido="Ríos",
-		)
-		db.session.add(cliente)
-		db.session.commit()
-		id_cliente = cliente.idCliente
 		token = create_access_token(
 			identity="7",
 			additional_claims={"rol": "admin", "idSucursal": None},
@@ -199,38 +220,62 @@ def test_endpoints_venta_post_lista_detalle_y_factura(app):
 
 	client = app.test_client()
 	headers = {"Authorization": f"Bearer {token}"}
-	respuesta = client.post("/api/ventas", json=payload_venta(idCliente=id_cliente), headers=headers)
+	respuesta = client.post(
+		"/api/ventas",
+		json=payload_venta(idCliente=1),
+		headers=headers,
+	)
 
 	assert respuesta.status_code == 201
 	id_venta = respuesta.json["data"]["idVenta"]
 	assert respuesta.json["data"]["factura"]["total"] == 14.0
-	assert respuesta.json["data"]["nombreVendedor"] == "Ana María Pérez López"
-	assert respuesta.json["data"]["nombreCliente"] == "Laura María Gómez Ríos"
+	assert respuesta.json["data"]["nombreVendedor"] == "Vendedor Prueba"
+	assert respuesta.json["data"]["nombreCliente"] == "Ana Prueba"
 
 	lista = client.get("/api/ventas?pagina=1&por_pagina=10", headers=headers)
 	detalle = client.get(f"/api/ventas/{id_venta}", headers=headers)
 	factura = client.get(f"/api/ventas/{id_venta}/factura", headers=headers)
 	usuarios = client.get("/api/usuarios/nombres", headers=headers)
-	cliente_respuesta = client.get(f"/api/clientes/{id_cliente}", headers=headers)
+	cliente_respuesta = client.get("/api/clientes/1", headers=headers)
 
 	assert lista.status_code == 200
 	assert lista.json["paginacion"]["total"] == 1
 	assert lista.json["data"][0]["activo"] is True
-	assert lista.json["data"][0]["nombreVendedor"] == "Ana María Pérez López"
-	assert lista.json["data"][0]["nombreCliente"] == "Laura María Gómez Ríos"
+	assert lista.json["data"][0]["nombreVendedor"] == "Vendedor Prueba"
+	assert lista.json["data"][0]["nombreCliente"] == "Ana Prueba"
+	busqueda_factura = client.get(
+		f"/api/ventas?factura={factura.json['numeroFactura']}",
+		headers=headers,
+	)
+
+	assert lista.json["data"][0]["clienteNombre"] == "Ana Prueba"
+	assert busqueda_factura.status_code == 200
+	assert busqueda_factura.json["paginacion"]["total"] == 1
+	assert busqueda_factura.json["data"][0]["factura"]["numeroFactura"] == factura.json["numeroFactura"]
 	assert detalle.status_code == 200
 	assert detalle.json["idVenta"] == id_venta
 	assert factura.status_code == 200
 	assert factura.json["total"] == 14.0
 	assert factura.json["activo"] is True
 	assert cliente_respuesta.status_code == 200
-	assert cliente_respuesta.json["primerNombre"] == "Laura"
-	assert cliente_respuesta.json["primerApellido"] == "Gómez"
+	assert cliente_respuesta.json["primerNombre"] == "Ana"
+	assert cliente_respuesta.json["primerApellido"] == "Prueba"
 	assert usuarios.status_code == 200
 	assert usuarios.json["data"][0] == {
 		"idUsuario": 7,
-		"nombre": "Ana María Pérez López",
+		"nombre": "Vendedor Prueba",
 	}
+	assert factura.json["cliente"]["numeroDocumento"] == "123"
+	assert factura.json["sucursal"]["nombre"] == "Sucursal Prueba"
+	assert factura.json["vendedor"]["nombre"] == "Vendedor Prueba"
+	assert factura.json["tipoVenta"] == "Mostrador"
+	assert factura.json["medioPago"] == "Efectivo"
+	assert factura.json["fechaVenta"]
+	assert float(factura.json["subtotal"]) == 15.15
+	assert float(factura.json["descuento"]) == 1.15
+	assert float(factura.json["costoEnvio"]) == 0
+	assert factura.json["detalles"][0]["codigoSKU"] == "TEST-001"
+	assert float(factura.json["detalles"][0]["precioUnitario"]) == 10.1
 
 
 def test_ruta_post_rechaza_sucursal_distinta_del_claim(app):
@@ -249,3 +294,111 @@ def test_ruta_post_rechaza_sucursal_distinta_del_claim(app):
 	)
 
 	assert respuesta.status_code == 403
+
+
+def test_listado_ventas_rechaza_vendedor_sin_sucursal(app):
+	from flask_jwt_extended import create_access_token
+
+	with app.app_context():
+		token = create_access_token(
+			identity="7",
+			additional_claims={"rol": "vendedor", "idSucursal": None},
+		)
+
+	respuesta = app.test_client().get(
+		"/api/ventas",
+		headers={"Authorization": f"Bearer {token}"},
+	)
+
+	assert respuesta.status_code == 403
+	assert "sucursal activa asignada" in respuesta.json["mensaje"]
+
+
+def test_catalogos_y_busqueda_de_clientes_activos(app):
+	from flask_jwt_extended import create_access_token
+
+	with app.app_context():
+		token = create_access_token(
+			identity="7",
+			additional_claims={"rol": "vendedor", "idSucursal": 1},
+		)
+
+	client = app.test_client()
+	headers = {"Authorization": f"Bearer {token}"}
+	catalogos = client.get("/api/catalogos", headers=headers)
+	clientes = client.get("/api/clientes?q=Ana", headers=headers)
+
+	assert catalogos.status_code == 200
+	assert catalogos.json["tiposVenta"] == [{"idTipoVenta": 1, "nombre": "Mostrador"}]
+	assert catalogos.json["metodosPago"] == [
+		{"idMetodoPago": 1, "nombre": "Efectivo"},
+		{"idMetodoPago": 2, "nombre": "Transferencia"},
+	]
+	assert catalogos.json["tiposDevolucion"] == [{"idTipoDevolucion": 1, "nombre": "Cambio"}]
+	assert catalogos.json["tiposDocumento"] == [
+		{"idTipoDocumento": 1, "acronimo": "CC", "nombre": "Cédula"}
+	]
+	assert clientes.status_code == 200
+	assert [cliente["idCliente"] for cliente in clientes.json["items"]] == [1]
+
+	cliente_por_documento = client.get(
+		"/api/clientes?documento=123",
+		headers=headers,
+	)
+	assert cliente_por_documento.status_code == 200
+	assert cliente_por_documento.json["items"][0]["idCliente"] == 1
+
+	nuevo_cliente = client.post(
+		"/api/clientes",
+		json={
+			"idTipoDocumento": 1,
+			"numeroDocumento": "999",
+			"primerNombre": "Luis",
+			"primerApellido": "Nuevo",
+			"direccion": "Calle 1",
+		},
+		headers=headers,
+	)
+	assert nuevo_cliente.status_code == 201
+	assert nuevo_cliente.json["idCliente"] is not None
+
+	venta_con_cliente = client.post(
+		"/api/ventas",
+		json=payload_venta(idCliente=nuevo_cliente.json["idCliente"]),
+		headers=headers,
+	)
+	assert venta_con_cliente.status_code == 201
+	assert venta_con_cliente.json["data"]["idCliente"] == nuevo_cliente.json["idCliente"]
+
+
+def test_listado_ventas_filtra_por_metodo_pago(app):
+	from flask_jwt_extended import create_access_token
+
+	with app.app_context():
+		token = create_access_token(
+			identity="7",
+			additional_claims={"rol": "admin", "idSucursal": None},
+		)
+
+	client = app.test_client()
+	headers = {"Authorization": f"Bearer {token}"}
+	for metodo in ("Efectivo", "Transferencia"):
+		respuesta = client.post(
+			"/api/ventas",
+			json=payload_venta(metodoPago=metodo),
+			headers=headers,
+		)
+		assert respuesta.status_code == 201
+
+	efectivo = client.get("/api/ventas?metodoPago=Efectivo", headers=headers)
+	transferencia = client.get("/api/ventas?metodoPago=transferencia", headers=headers)
+	todas = client.get("/api/ventas", headers=headers)
+
+	assert efectivo.status_code == 200
+	assert efectivo.json["paginacion"]["total"] == 1
+	assert efectivo.json["data"][0]["metodoPago"] == "Efectivo"
+	assert transferencia.status_code == 200
+	assert transferencia.json["paginacion"]["total"] == 1
+	assert transferencia.json["data"][0]["metodoPago"] == "Transferencia"
+	assert todas.status_code == 200
+	assert todas.json["paginacion"]["total"] == 2

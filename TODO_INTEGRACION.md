@@ -1,6 +1,6 @@
 # TODO de integración Backend + Frontend
 
-Estado revisado el 2026-10-14. La autenticación, el inventario de administrador, las vistas de inicio/facturas/finanzas y la primera versión de Tesorería ya consultan o guardan datos del backend; otras áreas siguen pendientes.
+Estado revisado el 2026-10-15. Hay flujos de API conectados y probados; las pantallas restantes de maqueta no deben considerarse operativas con datos reales hasta completar las tareas siguientes.
 
 ## PARA SOLUCIONAR
 
@@ -12,22 +12,21 @@ Cosas que ya existen en uno o ambos lados, pero tienen nombres/contratos distint
 - [x] **Administrador: inicio, facturas y finanzas**: sustituir datos de `mockData.js` por `/api/ventas`, `/api/ventas/<id>/factura`, `/api/v1/reportes/ventas` y `/api/tesoreria/resumen`; mantener la organización de Inicio, tomar ingresos de ventas activas y mostrar solo egresos registrados en Tesorería.
 - [x] **Administrador: reportes disponibles**: conectar ventas, facturación, devoluciones, ventas por producto, existencias, consolidado de sucursales y compras a proveedores al catálogo y contrato `{ kpis, secciones, periodo, alcance }` de `/api/v1/reportes`; las filas se asocian por posición con las columnas declaradas. Ingresos/egresos, estado de resultados y el reporte de empleados continúan pendientes por falta de datos/API completa.
 - [x] **Kardex de mercancía**: registrar automáticamente ventas, devoluciones aptas y ajustes; consultar movimientos paginados por sucursal, producto, tipo y período. Disponible para administración y bodega, con bodega restringida a su sucursal.
-- [x] **Administrador: empleados**: conectar listado, catálogos, creación con contraseña temporal, edición y activación/desactivación a la API; restringir las rutas a administradores y mantener las contraseñas fuera de las respuestas.
-- [ ] **Vendedor: registrar venta**: enviar el contrato requerido por `/api/ventas` (`idSucursal`, `idTipoVenta`, `metodoPago`, `detalles` con `idProducto` y `cantidad`). Reemplazar el producto y total estáticos; mostrar la factura que devuelve el servidor.
-- [ ] **Vendedor: búsquedas e historial**: conectar el listado paginado `/api/ventas`, el detalle y la factura, respetando los filtros y nombres de parámetros admitidos.
-- [ ] **Vendedor: devoluciones y domicilios**: adaptar formularios a los IDs y detalles que requieren `/api/devoluciones` y `/api/domicilios`; reemplazar búsqueda de texto estática por consulta real.
-- [ ] **Bodega: productos e inventario**: dejar de guardar saldos y productos en `localStorage`; persistir productos con `/api/productos`, consultar existencias con `/api/inventario` y traducir ajustes de stock a la operación `suma` o `resta` de `/api/inventario/ajustar`.
-- [ ] **Bodega: mercancía dañada**: antes de conectarla, completar las funciones que faltan en `inventario_service` (las rutas importan `existencias`, `ajustar_inventario`, `costo_de` y `dec`), proteger sus endpoints con JWT/roles y registrar el blueprint solo cuando pase sus pruebas.
-- [ ] **Rutas ya escritas pero no activas**: registrar y probar los blueprints de clientes y sucursales si esos flujos se van a usar; actualmente están implementados en archivos de rutas, pero no se registran en `create_app`.
-- [ ] **Roles y alcance por sucursal**: normalizar `admin`, `vendedor` y `bodega` entre la tabla de roles y los paneles; validar en API que usuarios no administradores solo consulten/editen su sucursal.
-- [ ] **Estados de interfaz**: agregar estados de carga, vacío, error de validación, expiración de sesión y reintento en las vistas conectadas.
+- [x] **Vendedor: registrar venta**: enviar el contrato requerido por `/api/ventas` (`idSucursal`, `idTipoVenta`, `metodoPago`, `detalles` con `idProducto` y `cantidad`). Reemplazar el producto y total estáticos; mostrar la factura que devuelve el servidor.
+- [x] **Vendedor: búsquedas e historial**: conectar el listado paginado `/api/ventas`, el detalle y la factura, respetando los filtros y nombres de parámetros admitidos.
+- [x] **Vendedor: devoluciones y domicilios**: adaptar formularios a los IDs y detalles que requieren `/api/devoluciones` y `/api/domicilios`; reemplazar búsqueda de texto estática por consulta real.
+- [x] **Bodega: productos e inventario**: productos y saldos se cargan desde `/api/productos` y `/api/inventario`; los formularios usan los catálogos y los IDs del backend, y los ajustes registran motivo y traducen la diferencia a `suma` o `resta` en `/api/inventario/ajustar`.
+- [x] **Bodega: mercancía dañada**: el servicio registra existencias y ajustes auditados; los endpoints `/api/v1/mercancia-danada` exigen JWT/roles y respetan la sucursal; formulario, consulta, transiciones y reporte usan la API en lugar de los datos ficticios.
+- [x] **Rutas de clientes y sucursales**: ambos blueprints están registrados y protegidos por JWT/roles; las pruebas cubren búsqueda y creación de clientes, permisos por sucursal y el uso de sucursales activas en el mockup del administrador. El formulario de venta aún no registra ventas ni clientes nuevos.
+- [x] **Roles y alcance por sucursal**: backend y paneles normalizan `administrador`/`admin` y `bodeguero`/`bodega`; inventario, ventas, domicilios, devoluciones, daños y reportes limitan a los no administradores a su sucursal efectiva. La administración de usuarios exige rol `admin` y el panel vendedor muestra su sucursal real.
+- [x] **Estados de interfaz**: los flujos conectados muestran carga, vacío y errores accesibles; las vistas de inventario, historial, tipos y mercancía dañada permiten reintentar; errores de validación muestran los mensajes del API y una respuesta 401 finaliza la sesión e informa al usuario.
 
 ## PARA AÑADIR
 
 Capacidades que no están implementadas como API funcional en este proyecto y que el diseño del frontend presenta.
 
-- [ ] **Permisos por función**: completar una interfaz y API para administrar permisos granulares. La gestión básica de empleados y asignación de roles del sistema ya está integrada; asistencia y nómina continúan pendientes por falta de modelos y persistencia.
-- [ ] **Asistencia**: modelos, persistencia y endpoints para registrar entradas/salidas y consultar asistencia.
+- [x] **Personal y permisos**: el panel de empleados usa la API para listar, crear, editar y desactivar cuentas; las operaciones exigen JWT y rol admin, guardan contraseña hasheada, rol y sucursal, y no exponen el hash. Roles y funciones se consultan y persisten en `TipoUsuario`/`Funcion`; solo se pueden crear los roles compatibles `admin`, `vendedor` y `bodega`. Los permisos de módulo se administran por rol.
+- [x] **Asistencia**: `POST /api/asistencia/entrada` y `/salida` registran el fichaje del usuario autenticado (una jornada por día); `GET /api/asistencia/mi-asistencia` consulta la jornada propia y `GET /api/asistencia` permite al administrador filtrar por fecha, sucursal y rol. Incluye modelo, migración y conexión de la maqueta existente.
 - [ ] **Nómina**: reglas, modelos, endpoints y pruebas; no calcular ni presentar nóminas de ejemplo como información real.
 - [x] **Tesorería (primera versión)**: ventas activas como ingresos automáticos; registro y consulta de egresos manuales con usuario, fecha, sucursal y método de pago. Los pagos de pedidos a proveedores, recaudos distintos de ventas, edición/anulación y conciliación bancaria todavía no están integrados.
 - [ ] **Recepción y compras a proveedores**: el administrador ya puede registrar órdenes y actualizar su estado mediante la API; falta completar la recepción física, actualizar existencias e integrar el historial de compras.

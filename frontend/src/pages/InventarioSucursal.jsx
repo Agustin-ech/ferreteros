@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Package, AlertTriangle, Wallet, Store, Pencil, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import ProductDetailPanel from '../components/ProductDetailPanel'
+import ApiState from '../components/ApiState'
 import api from '../api/client'
+import { errorMessage } from '../api/client'
 
 const formatoCOP = new Intl.NumberFormat('es-CO', {
   style: 'currency',
@@ -39,29 +41,26 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
   const [estadoFiltro, setEstadoFiltro] = useState('Todos')
   const [pagina, setPagina] = useState(1)
 
-  useEffect(() => {
-    let cancelado = false
+  const cargarInventario = useCallback(async () => {
     setCargando(true)
-
-    Promise.all([
-      api.get('/api/productos'),
-      api.get('/api/inventario', { params: { sucursal: idSucursal } }),
-    ]).then(([productosResponse, inventarioResponse]) => {
-      if (cancelado) return
+    setError('')
+    try {
+      const [productosResponse, inventarioResponse] = await Promise.all([
+        api.get('/api/productos'),
+        api.get('/api/inventario', { params: { sucursal: idSucursal } }),
+      ])
       setProductos(productosResponse.data || [])
       setInventario(inventarioResponse.data || [])
-      setError('')
-    }).catch((err) => {
-      if (cancelado) return
-      setError(err?.response?.data?.mensaje || err?.response?.data?.error || 'No se pudo cargar el inventario de esta sucursal.')
+    } catch (err) {
+      setError(errorMessage(err, 'No se pudo cargar el inventario de esta sucursal.'))
       setProductos([])
       setInventario([])
-    }).finally(() => {
-      if (!cancelado) setCargando(false)
-    })
-
-    return () => { cancelado = true }
+    } finally {
+      setCargando(false)
+    }
   }, [idSucursal])
+
+  useEffect(() => { cargarInventario() }, [cargarInventario])
 
   const filasBase = useMemo(() => {
     const stockPorProducto = Object.fromEntries(
@@ -141,6 +140,14 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
     })
   }
 
+  if (cargando || error) {
+    return <ApiState loading={cargando} error={error} onRetry={cargarInventario} loadingMessage={`Cargando inventario de ${nombreSucursal}...`} />
+  }
+
+  if (filas.length === 0) {
+    return <ApiState empty emptyMessage={`No hay productos activos en ${nombreSucursal}.`} />
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -148,14 +155,6 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
         <p className="text-sm text-gray-500">Consultar y gestionar el inventario de la sucursal {nombreSucursal}.</p>
       </div>
 
-      {cargando && <p className="text-sm text-gray-400">Cargando inventario de {nombreSucursal}...</p>}
-      {!cargando && error && (
-        <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
-          {error}
-        </p>
-      )}
-      {!cargando && !error && (
-        <>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
           icon={Package}
@@ -313,8 +312,6 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
           />
         )}
       </div>
-        </>
-      )}
     </div>
   )
 }

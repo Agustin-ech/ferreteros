@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Package, AlertTriangle, Wallet, Store, Plus, X } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import InventoryTable from '../components/InventoryTable'
 import ProductDetailPanel from '../components/ProductDetailPanel'
+import ApiState from '../components/ApiState'
 import api from '../api/client'
+import { errorMessage } from '../api/client'
 
 const formatoCOP = new Intl.NumberFormat('es-CO', {
   style: 'currency',
@@ -34,46 +36,37 @@ export default function InventarioGlobal({ productoParaBusqueda, onProductoAbier
     stock: '0', venta: '', compra: '', descripcion: '',
   })
 
-  useEffect(() => {
-    let cancelado = false
+  const cargarDatos = useCallback(async () => {
+    setCargando(true)
+    setError('')
+    try {
+      const [resSucursales, resProductos, resInventario, resCatalogos] = await Promise.all([
+        api.get('/api/sucursales', { params: { solo_activas: true } }),
+        api.get('/api/productos'),
+        api.get('/api/inventario'),
+        api.get('/api/productos/catalogos'),
+      ])
 
-    async function cargarDatos() {
-      try {
-        const [resSucursales, resProductos, resInventario, resCatalogos] = await Promise.all([
-          api.get('/api/sucursales', { params: { solo_activas: true } }),
-          api.get('/api/productos'),
-          api.get('/api/inventario'),
-          api.get('/api/productos/catalogos'),
-        ])
-
-        if (cancelado) return
-
-        const sucursalesOrdenadas = [...(resSucursales.data || [])].sort((a, b) => a.idSucursal - b.idSucursal)
-        const productosOrdenados = [...(resProductos.data || [])].sort((a, b) => a.nombre.localeCompare(b.nombre))
-
-        setSucursales(sucursalesOrdenadas)
-        setProductos(productosOrdenados)
-        setInventario(resInventario.data || [])
-        setTiposProducto(resCatalogos.data?.tiposProducto || [])
-        setUnidadesMedida(resCatalogos.data?.unidadesMedida || [])
-        setError('')
-      } catch (err) {
-        if (!cancelado) {
-          setError(err?.response?.data?.mensaje || err?.response?.data?.error || 'No se pudo cargar el inventario real.')
-          setSucursales([])
-          setProductos([])
-          setInventario([])
-          setTiposProducto([])
-          setUnidadesMedida([])
-        }
-      } finally {
-        if (!cancelado) setCargando(false)
-      }
+      const sucursalesOrdenadas = [...(resSucursales.data || [])].sort((a, b) => a.idSucursal - b.idSucursal)
+      const productosOrdenados = [...(resProductos.data || [])].sort((a, b) => a.nombre.localeCompare(b.nombre))
+      setSucursales(sucursalesOrdenadas)
+      setProductos(productosOrdenados)
+      setInventario(resInventario.data || [])
+      setTiposProducto(resCatalogos.data?.tipos || [])
+      setUnidadesMedida(resCatalogos.data?.unidades || [])
+    } catch (err) {
+      setError(errorMessage(err, 'No se pudo cargar el inventario real.'))
+      setSucursales([])
+      setProductos([])
+      setInventario([])
+      setTiposProducto([])
+      setUnidadesMedida([])
+    } finally {
+      setCargando(false)
     }
-
-    cargarDatos()
-    return () => { cancelado = true }
   }, [])
+
+  useEffect(() => { cargarDatos() }, [cargarDatos])
 
   const filas = useMemo(() => {
     if (!sucursales.length) return []
@@ -230,12 +223,8 @@ export default function InventarioGlobal({ productoParaBusqueda, onProductoAbier
     }
   }
 
-  if (cargando) {
-    return <div className="text-sm text-gray-400">Cargando inventario...</div>
-  }
-
-  if (error) {
-    return <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</div>
+  if (cargando || error) {
+    return <ApiState loading={cargando} error={error} onRetry={cargarDatos} loadingMessage="Cargando inventario real..." />
   }
 
   return (
@@ -279,7 +268,9 @@ export default function InventarioGlobal({ productoParaBusqueda, onProductoAbier
       </div>
 
       <div className={`grid gap-4 ${productoSeleccionado ? 'lg:grid-cols-[minmax(0,1fr)_340px]' : 'grid-cols-1'}`}>
-        <InventoryTable onSelectProduct={setProductoSeleccionado} filas={filas} sucursales={sucursales} />
+        {filas.length === 0
+          ? <ApiState empty emptyMessage="No hay productos ni existencias activas para mostrar." />
+          : <InventoryTable onSelectProduct={setProductoSeleccionado} filas={filas} sucursales={sucursales} />}
 
         {productoSeleccionado && (
           <ProductDetailPanel

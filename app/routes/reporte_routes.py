@@ -104,7 +104,7 @@ def generar_reporte(codigo: str):
 
 # --------------------------------------------------------------------------- Utilidades internas
 PARAMS_ENTEROS = {
-    "tercero_id", "idCliente", "idTipoVenta", "idTipoDevolucion", "idMetodoPago",
+    "tercero_id", "idCliente", "idTipoVenta", "idTipoDevolucion", "idTipoDanio", "idMetodoPago",
     "idProducto", "idProveedor", "limite",
 }
 PARAMS_BOOLEANOS = {"solo_aprobadas", "solo_agotados", "solo_bajo_minimo"}
