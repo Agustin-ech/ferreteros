@@ -81,6 +81,25 @@ def _error(mensaje, codigo):
     return jsonify({"error": mensaje}), codigo
 
 
+MENSAJES_RESTRICCION = {
+    "usuarios_numeroDocumento_key": "Ya existe un usuario con ese documento.",
+    "usuarios_correoElectronico_key": "Ya existe un usuario con ese correo electrónico.",
+}
+
+
+def _error_integridad(error):
+    """Traduce la restricción violada a un mensaje real en lugar de asumir un duplicado."""
+    diag = getattr(getattr(error, "orig", None), "diag", None)
+    restriccion = getattr(diag, "constraint_name", None)
+    if restriccion in MENSAJES_RESTRICCION:
+        return _error(MENSAJES_RESTRICCION[restriccion], 409)
+    detalle = getattr(diag, "message_detail", None) or str(getattr(error, "orig", error))
+    return jsonify({
+        "error": f"No se pudo guardar el usuario por una restricción de la base de datos: {detalle[:300]}",
+        "restriccion": restriccion,
+    }), 409
+
+
 def _validar_entrada(schema):
     contenido = request.get_json(silent=True)
     if contenido is not None and not isinstance(contenido, dict):
@@ -197,9 +216,9 @@ def crear_usuario():
         db.session.flush()
         _asignar_sucursal(usuario, campos["idSucursal"])
         db.session.commit()
-    except IntegrityError:
+    except IntegrityError as error:
         db.session.rollback()
-        return _error("Ya existe un usuario con ese documento o correo electrónico.", 409)
+        return _error_integridad(error)
     return jsonify({"mensaje": "Usuario creado exitosamente.", "usuario": usuario_schema.dump(usuario)}), 201
 
 
@@ -294,9 +313,9 @@ def actualizar_usuario(usuario_id):
 
     try:
         db.session.commit()
-    except IntegrityError:
+    except IntegrityError as error:
         db.session.rollback()
-        return _error("Ya existe un usuario con ese documento o correo electrónico.", 409)
+        return _error_integridad(error)
     return jsonify(usuario_schema.dump(usuario)), 200
 
 
