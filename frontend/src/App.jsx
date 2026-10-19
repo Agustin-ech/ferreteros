@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import Login from './pages/Login'
-import AdminApp from './AdminApp'
-import BodegaApp from './bodega/BodegaApp'
-import VendedorApp from './vendedor/VendedorApp'
 import api from './api/client'
+
+// Cada panel se descarga solo cuando el rol lo necesita: un vendedor no
+// baja el código del administrador ni las gráficas.
+const AdminApp = lazy(() => import('./AdminApp'))
+const BodegaApp = lazy(() => import('./bodega/BodegaApp'))
+const VendedorApp = lazy(() => import('./vendedor/VendedorApp'))
 
 const ROLES_VALIDOS = ['admin', 'bodega', 'vendedor']
 
@@ -101,8 +104,9 @@ export default function App() {
     )
   }
 
-  if (sesion?.rol === 'admin') return <AdminApp onLogout={cerrarSesion} />
-  if (sesion?.rol === 'bodega') return <BodegaApp onLogout={cerrarSesion} />
-  if (sesion?.rol === 'vendedor') return <VendedorApp usuario={sesion.usuario} onLogout={cerrarSesion} />
+  const cargandoPanel = <div className="grid min-h-screen place-items-center bg-[#141414] text-white">Cargando panel...</div>
+  if (sesion?.rol === 'admin') return <Suspense fallback={cargandoPanel}><AdminApp onLogout={cerrarSesion} /></Suspense>
+  if (sesion?.rol === 'bodega') return <Suspense fallback={cargandoPanel}><BodegaApp onLogout={cerrarSesion} /></Suspense>
+  if (sesion?.rol === 'vendedor') return <Suspense fallback={cargandoPanel}><VendedorApp usuario={sesion.usuario} onLogout={cerrarSesion} /></Suspense>
   return <Login onLogin={iniciarSesion} mensajeSesion={mensajeSesion}/>
 }

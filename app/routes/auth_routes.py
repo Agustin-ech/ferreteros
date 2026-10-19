@@ -2,7 +2,8 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from marshmallow import ValidationError
 from app.models.usuario import Usuario
-from app.schemas.usuario_schema import login_schema, usuario_schema
+from app.extensions import db
+from app.schemas.usuario_schema import carga_usuario, login_schema, usuario_schema
 from app.utils.roles import normalizar_rol
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -22,7 +23,7 @@ def login():
     password = data_validada["password"]
 
     # 2. Consultar el usuario en la base de datos
-    usuario = Usuario.query.filter_by(primerNombre=primer_nombre).first()
+    usuario = Usuario.query.options(*carga_usuario()).filter_by(primerNombre=primer_nombre).first()
 
     # 3. Validar existencia y hash de contraseña
     if not usuario or not usuario.check_password(password):
@@ -76,7 +77,7 @@ def obtener_perfil():
     Ruta protegida de prueba para verificar que el token JWT sea válido.
     """
     usuario_id = get_jwt_identity()
-    usuario = Usuario.query.get(usuario_id)
+    usuario = db.session.get(Usuario, usuario_id, options=carga_usuario())
 
     if not usuario:
         return jsonify({"mensaje": "Usuario no encontrado"}), 404

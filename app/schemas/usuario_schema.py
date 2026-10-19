@@ -1,5 +1,23 @@
 from marshmallow import Schema, fields, validate, validates, ValidationError
+from sqlalchemy.orm import joinedload, selectinload
+
+from app.models.sucursal_usuario import SucursalUsuario
+from app.models.tipo_usuario import TipoUsuario
+from app.models.usuario import Usuario
+from app.models.usuario_tipo_funcion import TipoUsuarioFuncion
 from app.utils.roles import normalizar_rol
+
+# Relaciones que UsuarioSchema recorre al serializar. Cargarlas por adelantado
+# evita una consulta por cada permiso y sucursal (con Supabase cada consulta
+# cuesta ~150 ms de ida y vuelta). Es una función porque construir las
+# opciones al importar configura los mappers antes de registrar todos los modelos.
+def carga_usuario():
+    return (
+        joinedload(Usuario.tipo_usuario)
+        .selectinload(TipoUsuario.funciones)
+        .joinedload(TipoUsuarioFuncion.funcion),
+        selectinload(Usuario.sucursales).joinedload(SucursalUsuario.sucursal),
+    )
 
 class LoginSchema(Schema):
 

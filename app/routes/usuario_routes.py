@@ -1,6 +1,8 @@
 from flask import Blueprint, g, jsonify, request
 from marshmallow import Schema, ValidationError, fields, validate, validates
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
 from app.models.funcion import Funcion
@@ -10,7 +12,7 @@ from app.models.tipo_documento import TipoDeDocumento
 from app.models.tipo_usuario import TipoUsuario
 from app.models.usuario import Usuario
 from app.models.usuario_tipo_funcion import TipoUsuarioFuncion
-from app.schemas.usuario_schema import usuario_schema
+from app.schemas.usuario_schema import carga_usuario, usuario_schema
 from app.utils.auth import roles_required
 from app.utils.roles import normalizar_rol
 
@@ -135,7 +137,18 @@ def _tipo_usuario_conocido(tipo_usuario_id):
 
 
 def _lista_roles():
-    tipos = TipoUsuario.query.filter_by(activo=True).order_by(TipoUsuario.nombre).all()
+    tipos = (
+        TipoUsuario.query.filter_by(activo=True)
+        .options(selectinload(TipoUsuario.funciones).joinedload(TipoUsuarioFuncion.funcion))
+        .order_by(TipoUsuario.nombre)
+        .all()
+    )
+    usuarios_por_tipo = dict(
+        db.session.query(Usuario.idTipoUsuario, func.count(Usuario.idUsuario))
+        .filter(Usuario.activo.is_(True))
+        .group_by(Usuario.idTipoUsuario)
+        .all()
+    )
     por_rol = {}
     for tipo in tipos:
         rol = normalizar_rol(tipo.nombre)
@@ -162,10 +175,7 @@ def _lista_roles():
             "descripcion": tipo.descripcion or "",
             "idFunciones": [funcion.idFuncion for funcion in funciones],
             "permisos": [funcion.nombre for funcion in funciones],
-            "usuarios": Usuario.query.filter_by(
-                idTipoUsuario=tipo.idTipoUsuario,
-                activo=True,
-            ).count(),
+            "usuarios": usuarios_por_tipo.get(tipo.idTipoUsuario, 0),
         })
     return salida
 
@@ -226,7 +236,11 @@ def crear_usuario():
 @usuario_bp.route("/api/usuarios", methods=["GET"])
 @roles_required("admin")
 def listar_usuarios():
-    usuarios = Usuario.query.order_by(Usuario.primerApellido, Usuario.primerNombre).all()
+    usuarios = (
+        Usuario.query.options(*carga_usuario())
+        .order_by(Usuario.primerApellido, Usuario.primerNombre)
+        .all()
+    )
     return jsonify([usuario_schema.dump(usuario) for usuario in usuarios]), 200
 
 
@@ -323,7 +337,7 @@ def actualizar_usuario(usuario_id):
 @usuario_bp.route("/api/usuarios/<int:usuario_id>", methods=["GET"])
 @roles_required("admin")
 def obtener_usuario(usuario_id):
-    usuario = db.session.get(Usuario, usuario_id)
+    usuario = db.session.get(Usuario, usuario_id, options=carga_usuario(), populate_existing=True)
     if usuario is None:
         return _error("El usuario no existe.", 404)
     return jsonify(usuario_schema.dump(usuario)), 200
