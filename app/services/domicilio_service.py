@@ -5,6 +5,7 @@ from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models.cliente import Cliente
+from app.models.domicilio import Domicilio
 from app.models.entrega import Entrega
 from app.models.sucursal import Sucursal
 from app.models.venta import Venta
@@ -57,6 +58,17 @@ class DomicilioService:
                 costoEnvio=costo_envio,
             )
             db.session.add(entrega)
+            db.session.flush()
+
+            # Registro del despacho y del cobro contra entrega: al salir aún no
+            # se ha recibido dinero, así que el desbalance es todo el total.
+            db.session.add(Domicilio(
+                idEntrega=entrega.idEntrega,
+                idUsuario=usuario["id"],
+                montoEsperado=venta.total,
+                montoRecibido=Decimal("0.00"),
+                desbalance=venta.total,
+            ))
             db.session.commit()
             return entrega
         except Exception:

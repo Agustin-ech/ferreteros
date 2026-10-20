@@ -5,7 +5,7 @@ import api from '../api/client'
 import { errorMessage } from '../api/client'
 
 export default function Login({ onLogin, mensajeSesion = '' }) {
-  const [primerNombre, setPrimerNombre] = useState('')
+  const [usuario, setUsuario] = useState('')
   const [clave, setClave] = useState('')
   const [verClave, setVerClave] = useState(false)
   const [error, setError] = useState('')
@@ -18,14 +18,14 @@ export default function Login({ onLogin, mensajeSesion = '' }) {
 
     try {
       const respuesta = await api.post('/api/auth/login', {
-        primerNombre: primerNombre.trim(),
+        usuario: usuario.trim(),
         password: clave,
       })
       onLogin(respuesta.data)
     } catch (err) {
       const mensaje = errorMessage(err, 'No se pudo iniciar sesión.')
       if (err.response?.status === 401) {
-        setError('Nombre o contraseña incorrectos.')
+        setError('Usuario o contraseña incorrectos.')
       } else if (err.response?.status === 403 || err.response?.status === 400) {
         setError(mensaje || 'No se pudo iniciar sesión. Revisa los datos ingresados.')
       } else if (err.response) {
@@ -55,12 +55,12 @@ export default function Login({ onLogin, mensajeSesion = '' }) {
           <h1 className="text-center text-2xl font-bold text-black">Iniciar sesión</h1>
 
           <label className="block text-black">
-            Nombre
+            Correo o número de documento
             <input
               type="text"
-              value={primerNombre}
-              onChange={(e) => { setPrimerNombre(e.target.value); setError('') }}
-              placeholder="Tu nombre de usuario"
+              value={usuario}
+              onChange={(e) => { setUsuario(e.target.value); setError('') }}
+              placeholder="correo@ejemplo.com o 1234567890"
               autoComplete="username"
               required
               className={`${campo} mt-1`}

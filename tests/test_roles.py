@@ -13,14 +13,28 @@ def test_login_devuelve_rol_canonico_para_administrador():
 
         usuario = db.session.get(Usuario, 1)
         usuario.set_password("clave-de-prueba")
+        documento = usuario.numeroDocumento
+        correo = usuario.correoElectronico
         db.session.commit()
 
     respuesta = app.test_client().post(
         "/api/auth/login",
-        json={"primerNombre": "Usuario", "password": "clave-de-prueba"},
+        json={"usuario": documento, "password": "clave-de-prueba"},
     )
 
     assert respuesta.status_code == 200
+    # El correo también sirve, sin importar mayúsculas.
+    por_correo = app.test_client().post(
+        "/api/auth/login",
+        json={"usuario": correo.upper(), "password": "clave-de-prueba"},
+    )
+    assert por_correo.status_code == 200
+    # El primer nombre ya no identifica al usuario.
+    por_nombre = app.test_client().post(
+        "/api/auth/login",
+        json={"usuario": "Usuario", "password": "clave-de-prueba"},
+    )
+    assert por_nombre.status_code == 401
     assert respuesta.json["usuario"]["rol"] == "admin"
     with app.app_context():
         claims = decode_token(respuesta.json["access_token"])

@@ -53,6 +53,12 @@ body {
   }
 }
 
+/* Edge agrega su propio botón para ver la contraseña; el login ya tiene uno. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 /* Estilos acotados a los paneles operativos; Admin conserva sus clases visuales. */
 @layer components {
   .role-panel .input { @apply w-full rounded-lg border border-panel-border bg-panel-card px-3 py-2 text-sm text-gray-200 outline-none placeholder-gray-500 focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow; }

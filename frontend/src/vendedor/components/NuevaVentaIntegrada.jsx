@@ -394,9 +394,9 @@ export default function NuevaVentaIntegrada({ idSucursal, puedeDomicilio = true 
             <ul className="absolute left-0 top-full z-10 mt-1 max-h-56 w-full overflow-auto border border-[#333] bg-[#151515] shadow-lg">
               {productosDisponibles.map((producto) => (
                 <li key={producto.idProducto}>
-                  <button type="button" onClick={() => agregarProducto(producto)} className="flex w-full justify-between gap-4 px-3 py-2 text-left text-sm text-white hover:bg-[#292929]">
-                    <span>{producto.codigoSKU} · {producto.nombre}</span>
-                    <span className="flex gap-4 whitespace-nowrap"><span className="text-gray-400">Disp: {producto.disponible}</span><PrecioProducto producto={producto} /></span>
+                  <button type="button" onClick={() => agregarProducto(producto)} className="flex w-full flex-col gap-1 px-3 py-2 text-left text-sm text-white hover:bg-[#292929] sm:flex-row sm:justify-between sm:gap-4">
+                    <span className="min-w-0 break-words">{producto.codigoSKU} · {producto.nombre}</span>
+                    <span className="flex flex-wrap items-center gap-x-4 gap-y-1"><span className="text-gray-400">Disp: {producto.disponible}</span><PrecioProducto producto={producto} /></span>
                   </button>
                 </li>
               ))}
