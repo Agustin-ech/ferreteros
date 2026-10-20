@@ -154,6 +154,10 @@ class VentaService:
                 VentaService.CENTAVO,
                 rounding=ROUND_HALF_UP,
             )
+            # El descuento manual no tiene tope por producto: solo el administrador
+            # puede aplicarlo (un vendedor podría dejar la venta en $0 llamando a la API).
+            if descuento_manual > 0 and usuario.get("rol") != "admin":
+                raise PermissionError("Solo el administrador puede aplicar descuentos manuales.")
             if descuento_manual > subtotal_venta - descuento_productos:
                 raise ValueError("El descuento no puede ser mayor al total de la venta.")
             descuento = descuento_productos + descuento_manual

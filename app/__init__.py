@@ -7,11 +7,23 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # Con una clave corta o adivinable cualquiera podría fabricar un token de
+    # administrador. Se exige una clave larga (p. ej. secrets.token_urlsafe(64)).
+    clave_jwt = app.config.get("JWT_SECRET_KEY") or ""
+    if len(clave_jwt) < 32:
+        raise RuntimeError(
+            "JWT_SECRET_KEY debe tener al menos 32 caracteres aleatorios. "
+            "Genera una con: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+        )
+
     # Inicializar extensiones
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
     cors.init_app(app)
+
+    from app.utils.sesion import registrar_validacion_sesion
+    registrar_validacion_sesion(jwt)
 
     from app.models.usuario import Usuario
     from app.models.sucursal import Sucursal
