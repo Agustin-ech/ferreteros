@@ -9,6 +9,7 @@ from app.schemas.devolucion_schema import (
 from app.services.devolucion_service import DevolucionService
 from app.utils.decorators import requiere_rol
 from app.utils.roles import normalizar_rol
+from app.utils.permisos import DEVOLUCIONES, requiere_funcion
 
 devolucion_bp = Blueprint("devolucion_bp", __name__, url_prefix="/api/devoluciones")
 
@@ -25,6 +26,7 @@ def _usuario_actual():
 @devolucion_bp.route("", methods=["POST"])
 @jwt_required()
 @requiere_rol("admin", "vendedor")
+@requiere_funcion(DEVOLUCIONES)
 def registrar_devolucion():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
@@ -65,6 +67,7 @@ def registrar_devolucion():
 @devolucion_bp.route("/<int:id>", methods=["GET"])
 @jwt_required()
 @requiere_rol("admin", "vendedor")
+@requiere_funcion(DEVOLUCIONES)
 def obtener_devolucion(id):
     devolucion = DevolucionService.obtener_devolucion(id, _usuario_actual())
     if devolucion is None:
@@ -76,6 +79,7 @@ def obtener_devolucion(id):
 @devolucion_bp.route("", methods=["GET"])
 @jwt_required()
 @requiere_rol("admin", "vendedor")
+@requiere_funcion(DEVOLUCIONES)
 def listar_devoluciones():
     valor_id_factura = request.args.get("idFactura")
     try:

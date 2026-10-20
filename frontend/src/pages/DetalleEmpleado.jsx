@@ -30,6 +30,7 @@ function aPayload(form) {
   }
   if (form.idTipoUsuario) payload.idTipoUsuario = Number(form.idTipoUsuario)
   if (form.idSucursal) payload.idSucursal = Number(form.idSucursal)
+  if (form.nuevaPassword) payload.password = form.nuevaPassword
   return payload
 }
 
@@ -53,6 +54,10 @@ export default function DetalleEmpleado({
   async function handleGuardar(e) {
     e.preventDefault()
     setError('')
+    if (form.nuevaPassword && form.nuevaPassword.length < 8) {
+      setError('La nueva contraseña debe tener al menos 8 caracteres.')
+      return
+    }
     setGuardando(true)
     try {
       const actualizado = await onGuardar(aPayload(form))
@@ -106,6 +111,12 @@ export default function DetalleEmpleado({
           <Campo label="Cédula" value={form.cedula} editando={editando} onChange={(v) => actualizar('cedula', v)} />
           <Campo label="Teléfono" value={form.telefono} editando={editando} onChange={(v) => actualizar('telefono', v)} />
           <Campo label="Correo electrónico" value={form.correo} editando={editando} onChange={(v) => actualizar('correo', v)} type="email" />
+          {editando && (
+            <label className="flex flex-col gap-1 text-xs text-gray-400">
+              Nueva contraseña (opcional, mínimo 8 caracteres)
+              <input type="password" autoComplete="new-password" value={form.nuevaPassword || ''} onChange={(e) => actualizar('nuevaPassword', e.target.value)} placeholder="Déjala vacía para no cambiarla" className="bg-panel-bg border border-panel-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 outline-none" />
+            </label>
+          )}
         </div>
 
         <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">

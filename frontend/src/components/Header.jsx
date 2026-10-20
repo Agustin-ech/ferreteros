@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Search, MapPin, User, LogOut } from 'lucide-react'
 import api from '../api/client'
+import CambiarPassword from './CambiarPassword'
 
 export default function Header({ onLogout, onSelectProduct }) {
   const [perfil, setPerfil] = useState(null)
@@ -196,6 +197,8 @@ export default function Header({ onLogout, onSelectProduct }) {
             {perfil ? primerNombre : errorPerfil ? 'Perfil no disponible' : 'Cargando perfil...'}
           </span>
         </div>
+
+        <CambiarPassword />
 
         {onLogout && (
           <button

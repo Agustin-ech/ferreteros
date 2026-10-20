@@ -83,3 +83,28 @@ def obtener_perfil():
         return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
     return jsonify({"usuario": usuario_schema.dump(usuario)}), 200
+
+
+@auth_bp.route("/cambiar-password", methods=["POST"])
+@jwt_required()
+def cambiar_password():
+    """Cualquier usuario autenticado cambia su propia contraseña."""
+    data = request.get_json(silent=True) or {}
+    actual = data.get("passwordActual")
+    nueva = data.get("passwordNueva")
+    if not isinstance(actual, str) or not isinstance(nueva, str) or not actual or not nueva:
+        return jsonify({"mensaje": "Escribe la contraseña actual y la nueva."}), 400
+    if len(nueva) < 8 or len(nueva) > 255:
+        return jsonify({"mensaje": "La nueva contraseña debe tener entre 8 y 255 caracteres."}), 400
+
+    usuario = db.session.get(Usuario, int(get_jwt_identity()))
+    if usuario is None or not usuario.activo:
+        return jsonify({"mensaje": "Usuario no encontrado o inactivo."}), 404
+    if not usuario.check_password(actual):
+        return jsonify({"mensaje": "La contraseña actual no es correcta."}), 400
+    if usuario.check_password(nueva):
+        return jsonify({"mensaje": "La nueva contraseña debe ser diferente de la actual."}), 400
+
+    usuario.set_password(nueva)
+    db.session.commit()
+    return jsonify({"mensaje": "Contraseña actualizada correctamente."}), 200

@@ -14,6 +14,7 @@ from app.models.sucursal import Sucursal
 from app.services.inventario_service import ajustar_inventario
 from app.utils.decorators import requiere_rol
 from app.utils.roles import normalizar_rol, sucursal_autorizada
+from app.utils.permisos import PRODUCTOS, requiere_funcion
 
 mercancia_recibida_bp = Blueprint(
     "mercancia_recibida",
@@ -44,6 +45,7 @@ registro_recepcion_schema = RegistroRecepcionSchema()
 @mercancia_recibida_bp.route("", methods=["GET"])
 @jwt_required()
 @requiere_rol("admin", "bodega")
+@requiere_funcion(PRODUCTOS)
 def listar_mercancia_recibida():
     claims = get_jwt()
     rol = normalizar_rol(claims.get("rol"))
@@ -74,6 +76,7 @@ def listar_mercancia_recibida():
 @mercancia_recibida_bp.route("", methods=["POST"])
 @jwt_required()
 @requiere_rol("admin", "bodega")
+@requiere_funcion(PRODUCTOS)
 def registrar_mercancia_recibida():
     cuerpo = request.get_json(silent=True)
     if not isinstance(cuerpo, dict):

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BodegaProvider, useBodega } from "./store.jsx";
-import Layout from "./components/Layout.jsx";
+import Layout, { navigation } from "./components/Layout.jsx";
+import { crearVerificador, moduloDePagina } from "../utils/permisos";
 import Inicio from "./pages/Inicio.jsx";
 import RegistrarProducto from "./pages/RegistrarProducto.jsx";
 import ConsultarProductos from "./pages/ConsultarProductos.jsx";
@@ -23,8 +24,10 @@ const paginas = {
   "consultar-danados": ConsultarDanados,
 };
 
-function PaginaBodega({ Pagina, onNavigate }) {
-  const { cargando, error, recargar } = useBodega();
+const moduloPorPagina = moduloDePagina(navigation);
+
+function PaginaBodega({ Pagina, pagina, onNavigate }) {
+  const { cargando, error, recargar, modulos } = useBodega();
   if (cargando) return <p role="status" className="text-sm text-gray-300">Cargando productos e inventario...</p>;
   if (error) {
     return (
@@ -34,6 +37,7 @@ function PaginaBodega({ Pagina, onNavigate }) {
       </div>
     );
   }
+  if (!crearVerificador(modulos)(moduloPorPagina[pagina])) return <div role="alert" className="card p-6 text-sm text-gray-300">Tu rol no tiene permiso para esta sección. Pide al administrador que lo active en Roles y permisos.</div>;
   return <Pagina onNavigate={onNavigate} />;
 }
 
@@ -44,7 +48,7 @@ export default function BodegaApp({ onLogout }) {
   return (
     <BodegaProvider>
       <Layout activePage={activePage} onNavigate={setActivePage} onLogout={onLogout}>
-        <PaginaBodega Pagina={Pagina} onNavigate={setActivePage} />
+        <PaginaBodega Pagina={Pagina} pagina={activePage} onNavigate={setActivePage} />
       </Layout>
     </BodegaProvider>
   );

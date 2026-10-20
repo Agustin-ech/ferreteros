@@ -69,6 +69,7 @@ from app.services.reporte_service import (
     validar_periodo,
 )
 from app.utils.decorators import requiere_rol
+from app.utils.permisos import MERMAS, requiere_funcion
 
 mercancia_danada_bp = Blueprint("mercancia_danada", __name__, url_prefix="/api/v1/mercancia-danada")
 
@@ -351,6 +352,7 @@ def _entero(valor, nombre: str) -> int:
 @mercancia_danada_bp.get("/tipos-danio")
 @jwt_required()
 @requiere_rol("admin", "bodega")
+@requiere_funcion(MERMAS)
 def listar_tipos_danio():
     """Catálogo de motivos de daño (alimenta el selector del formulario de bodega)."""
     tipos = db.session.execute(
@@ -380,6 +382,7 @@ def crear_tipo_danio():
 @mercancia_danada_bp.post("/")
 @jwt_required()
 @requiere_rol("admin", "bodega")
+@requiere_funcion(MERMAS)
 def registrar_mercancia_danada():
     """Registra productos en mal estado y descuenta el inventario."""
     datos = RegistroDanioSchema().load(request.get_json(silent=True) or {})
@@ -394,6 +397,7 @@ def registrar_mercancia_danada():
 @mercancia_danada_bp.get("/")
 @jwt_required()
 @requiere_rol("admin", "bodega")
+@requiere_funcion(MERMAS)
 def listar_mercancia_danada():
     """
     Listado con filtros y paginación.
@@ -450,6 +454,7 @@ def listar_mercancia_danada():
 @mercancia_danada_bp.get("/resumen")
 @jwt_required()
 @requiere_rol("admin", "bodega")
+@requiere_funcion(MERMAS)
 def resumen_mercancia_danada():
     """Unidades y valor de la mercancía afectada: por motivo, por sucursal y por producto."""
     Producto = modelo("Producto")
@@ -519,6 +524,7 @@ def resumen_mercancia_danada():
 @mercancia_danada_bp.get("/<int:id_registro>")
 @jwt_required()
 @requiere_rol("admin", "bodega")
+@requiere_funcion(MERMAS)
 def obtener_mercancia_danada(id_registro: int):
     registro = _obtener(id_registro)
     cuerpo = serializar(registro)
@@ -530,6 +536,7 @@ def obtener_mercancia_danada(id_registro: int):
 @mercancia_danada_bp.patch("/<int:id_registro>/estado")
 @jwt_required()
 @requiere_rol("admin", "bodega")
+@requiere_funcion(MERMAS)
 def cambiar_estado_mercancia_danada(id_registro: int):
     """Dar de baja, reclamar al proveedor, marcar como recuperada o anular."""
     datos = CambioEstadoSchema().load(request.get_json(silent=True) or {})
@@ -542,6 +549,7 @@ def cambiar_estado_mercancia_danada(id_registro: int):
 @mercancia_danada_bp.delete("/<int:id_registro>")
 @jwt_required()
 @requiere_rol("admin", "bodega")
+@requiere_funcion(MERMAS)
 def anular_mercancia_danada(id_registro: int):
     """Anula el registro (error de digitación) y devuelve las unidades al inventario."""
     registro = cambiar_estado(id_registro, ESTADO_ANULADA,

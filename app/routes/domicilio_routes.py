@@ -15,6 +15,7 @@ from app.schemas.domicilio_schema import (
 from app.services.domicilio_service import DomicilioService
 from app.utils.decorators import requiere_rol
 from app.utils.roles import normalizar_rol
+from app.utils.permisos import DOMICILIOS, requiere_funcion
 
 domicilio_bp = Blueprint("domicilio_bp", __name__, url_prefix="/api/domicilios")
 
@@ -31,6 +32,7 @@ def _usuario_actual():
 @domicilio_bp.route("", methods=["POST"])
 @jwt_required()
 @requiere_rol("admin", "vendedor")
+@requiere_funcion(DOMICILIOS)
 def crear_domicilio():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
@@ -63,6 +65,7 @@ def crear_domicilio():
 @domicilio_bp.route("", methods=["GET"])
 @jwt_required()
 @requiere_rol("admin", "vendedor")
+@requiere_funcion(DOMICILIOS)
 def listar_domicilios():
     entregas = DomicilioService.listar_domicilios(_usuario_actual())
     return jsonify(domicilios_output_schema.dump(entregas)), 200
@@ -71,6 +74,7 @@ def listar_domicilios():
 @domicilio_bp.route("/<int:id_entrega>", methods=["GET"])
 @jwt_required()
 @requiere_rol("admin", "vendedor")
+@requiere_funcion(DOMICILIOS)
 def obtener_domicilio(id_entrega):
     usuario = _usuario_actual()
     consulta = select(Entrega).join(Venta).where(Entrega.idEntrega == id_entrega)

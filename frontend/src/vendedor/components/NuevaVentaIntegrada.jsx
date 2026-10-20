@@ -39,7 +39,7 @@ function mensajeError(error) {
   return error.response?.data?.mensaje || error.response?.data?.error || 'No se pudo completar la operación.'
 }
 
-export default function NuevaVentaIntegrada({ idSucursal }) {
+export default function NuevaVentaIntegrada({ idSucursal, puedeDomicilio = true }) {
   const [catalogos, setCatalogos] = useState({ tiposVenta: [], metodosPago: [], tiposDocumento: [] })
   const [productosEncontrados, setProductosEncontrados] = useState([])
   const [consultaProducto, setConsultaProducto] = useState('')
@@ -372,7 +372,7 @@ export default function NuevaVentaIntegrada({ idSucursal }) {
         <label className="text-xs text-gray-400">Tipo de venta
           <select required value={tipoVenta} onChange={(evento) => setTipoVenta(evento.target.value)} className={`${campo} mt-1`}>
             <option value="">Selecciona</option>
-            {catalogos.tiposVenta.map((tipo) => <option key={tipo.idTipoVenta} value={tipo.idTipoVenta}>{tipo.nombre}</option>)}
+            {catalogos.tiposVenta.filter((tipo) => puedeDomicilio || tipo.nombre.trim().toLowerCase() !== 'domicilio').map((tipo) => <option key={tipo.idTipoVenta} value={tipo.idTipoVenta}>{tipo.nombre}</option>)}
           </select>
         </label>
         <label className="text-xs text-gray-400">Método de pago

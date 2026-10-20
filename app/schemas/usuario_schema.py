@@ -83,6 +83,8 @@ class UsuarioSchema(Schema):
     idSucursal = fields.Method("sucursal_id", dump_only=True)
     sucursal = fields.Method("sucursal_nombre", dump_only=True)
     permisos = fields.Method("permisos_rol", dump_only=True)
+    # Códigos (Funcion.modulo) que el frontend usa para mostrar u ocultar menús.
+    modulos = fields.Method("modulos_rol", dump_only=True)
     activo = fields.Bool(dump_only=True)
 
     def nombre_completo(self, usuario):
@@ -116,6 +118,13 @@ class UsuarioSchema(Schema):
                 if asignacion.funcion and asignacion.funcion.activo
             ),
             key=str.casefold,
+        )
+
+    def modulos_rol(self, usuario):
+        return sorted(
+            asignacion.funcion.modulo
+            for asignacion in usuario.tipo_usuario.funciones
+            if asignacion.funcion and asignacion.funcion.activo
         )
 
     def _sucursales_activas(self, usuario):
