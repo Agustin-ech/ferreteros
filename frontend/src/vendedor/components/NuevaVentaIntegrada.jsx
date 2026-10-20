@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FiPlus, FiShoppingCart, FiTrash2 } from 'react-icons/fi'
 import {
   buscarClientePorDocumento,
@@ -12,7 +12,7 @@ import {
 } from '../../api/vendedor'
 import api from '../../api/client'
 import { actualizarCache, esErrorDeRed } from '../../offline/cacheConsultas'
-import { encolarVenta, nuevoComprobanteProvisional, nuevoIdOperacion } from '../../offline/colaVentas'
+import { encolarVenta, ESTADO, listarCola, nuevoComprobanteProvisional, nuevoIdOperacion } from '../../offline/colaVentas'
 import ComprobanteProvisional from '../../offline/ComprobanteProvisional'
 
 const moneda = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
@@ -85,23 +85,43 @@ export default function NuevaVentaIntegrada({ idSucursal, idUsuario, puedeDomici
     return () => { vigente = false }
   }, [])
 
+  // Disponibilidad en la sucursal. Otro vendedor puede vender lo mismo mientras
+  // tanto, así que se vuelve a consultar periódicamente y antes de cobrar.
+  const consultarExistencias = useCallback(async () => {
+    const respuesta = await listarInventarioSucursal(idSucursal)
+    const mapa = new Map(
+      respuesta.data
+        .filter((item) => item.activo !== false)
+        .map((item) => [item.idProducto, Number(item.cantidadDisponible || 0)]),
+    )
+    // Ventas de este dispositivo aún sin enviar: el servidor todavía no las
+    // descontó. (La copia guardada sin conexión ya las tiene descontadas.)
+    if (!respuesta.desdeCache) {
+      for (const item of await listarCola().catch(() => [])) {
+        if (item.estado !== ESTADO.pendiente || Number(item.payload.idSucursal) !== Number(idSucursal)) continue
+        for (const { idProducto, cantidad } of item.payload.detalles) {
+          if (mapa.has(idProducto)) mapa.set(idProducto, mapa.get(idProducto) - Number(cantidad))
+        }
+      }
+    }
+    setExistencias(mapa)
+    return mapa
+  }, [idSucursal])
+
   useEffect(() => {
-    let vigente = true
-    if (!idSucursal) return () => { vigente = false }
-    listarInventarioSucursal(idSucursal)
-      .then(({ data }) => {
-        if (!vigente) return
-        setExistencias(new Map(
-          data
-            .filter((item) => item.activo !== false)
-            .map((item) => [item.idProducto, Number(item.cantidadDisponible || 0)]),
-        ))
-      })
-      .catch((err) => {
-        if (vigente) setError(mensajeError(err))
-      })
-    return () => { vigente = false }
-  }, [idSucursal, versionInventario])
+    if (!idSucursal) return undefined
+    consultarExistencias().catch((err) => setError(mensajeError(err)))
+    const refrescar = () => { consultarExistencias().catch(() => {}) }
+    const intervalo = setInterval(refrescar, 30000)
+    const alVolver = () => { if (!document.hidden) refrescar() }
+    document.addEventListener('visibilitychange', alVolver)
+    window.addEventListener('offline:sincronizadas', refrescar)
+    return () => {
+      clearInterval(intervalo)
+      document.removeEventListener('visibilitychange', alVolver)
+      window.removeEventListener('offline:sincronizadas', refrescar)
+    }
+  }, [idSucursal, versionInventario, consultarExistencias])
 
   useEffect(() => {
     let vigente = true
@@ -146,6 +166,14 @@ export default function NuevaVentaIntegrada({ idSucursal, idUsuario, puedeDomici
         .filter((producto) => producto.disponible > 0)
       : []),
     [productosEncontrados, existencias],
+  )
+
+  // Productos del carrito que ya no alcanzan (p. ej. otro vendedor vendió mientras tanto).
+  const faltantes = useMemo(
+    () => (existencias
+      ? carrito.filter((item) => Number(item.cantidad) > (existencias.get(item.idProducto) ?? 0))
+      : []),
+    [carrito, existencias],
   )
 
   const resumen = useMemo(
@@ -269,8 +297,18 @@ export default function NuevaVentaIntegrada({ idSucursal, idUsuario, puedeDomici
     setResultado(null)
     if (!idSucursal) return setError('La sesión no tiene una sucursal asignada.')
     if (!carrito.length) return setError('Agrega al menos un producto.')
-    const sinStock = carrito.find((item) => Number(item.cantidad) > (existencias?.get(item.idProducto) ?? 0))
-    if (sinStock) return setError(`Solo hay ${existencias?.get(sinStock.idProducto) ?? 0} unidades de '${sinStock.nombre}' en tu sucursal.`)
+    // Consulta la disponibilidad real justo antes de cobrar.
+    let disponibles = existencias
+    try {
+      disponibles = await consultarExistencias()
+    } catch { /* sin respuesta: se valida con lo último conocido y el servidor confirma */ }
+    const sinStock = carrito.find((item) => Number(item.cantidad) > (disponibles?.get(item.idProducto) ?? 0))
+    if (sinStock) {
+      const quedan = Math.max(0, disponibles?.get(sinStock.idProducto) ?? 0)
+      return setError(quedan > 0
+        ? `Solo quedan ${quedan} unidades de '${sinStock.nombre}' en tu sucursal. Ajusta la cantidad antes de cobrar.`
+        : `'${sinStock.nombre}' ya no tiene existencias en tu sucursal (otra venta lo agotó). Quítalo del carrito antes de cobrar.`)
+    }
     if (!tipoVenta || !metodoPago) return setError('Selecciona el tipo de venta y el método de pago.')
     if (consultaCliente.trim() && !seleccionCliente) return setError('Busca y selecciona el cliente, o completa su registro antes de procesar la venta.')
     if (esDomicilio && !seleccionCliente) return setError('Selecciona un cliente para el domicilio.')
@@ -513,6 +551,15 @@ export default function NuevaVentaIntegrada({ idSucursal, idUsuario, puedeDomici
           </div>
         )}
         <p className="text-lg font-semibold text-white">Total estimado: <span className="text-[#F2B01E]">{moneda.format(resumen.total)}</span></p>
+        {faltantes.length > 0 && (
+          <div role="alert" className="w-full border border-amber-700 bg-amber-950/40 p-3 text-sm text-amber-200">
+            La disponibilidad cambió (otra venta en tu sucursal):{' '}
+            {faltantes.map((item) => {
+              const quedan = Math.max(0, existencias.get(item.idProducto) ?? 0)
+              return `${item.nombre}: ${quedan > 0 ? `quedan ${quedan}` : 'agotado'}`
+            }).join(' · ')}
+          </div>
+        )}
         {error && <p role="alert" className="w-full text-sm text-red-400">{error}</p>}
         {comprobante && <ComprobanteProvisional comprobante={comprobante} onCerrar={() => setComprobante(null)} />}
         {resultado && <div role="status" className="w-full border border-emerald-800 bg-emerald-950/40 p-4 text-sm text-emerald-200">
