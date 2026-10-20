@@ -77,7 +77,7 @@ export default function RegistrarProducto() {
           <Campo label="Precio de venta" requerido><input type="number" min="0.01" step="0.01" className="input" placeholder="Ej: 15000" value={f.venta} onChange={set("venta")} /></Campo>
           <Campo label="Precio de compra" requerido><input type="number" min="0.01" step="0.01" className="input" placeholder="Ej: 10000" value={f.compra} onChange={set("compra")} /></Campo>
           <div className="text-sm md:col-span-2">
-            <span className="mb-1 block">Foto del producto</span>
+            <span className="mb-1 block">Foto del producto <span className="text-gray-500">(opcional)</span></span>
             <SelectorFoto archivo={foto} onChange={setFoto} onQuitar={() => setFoto(null)} deshabilitado={guardando} />
           </div>
           <Campo label="Descripción"><textarea className="input h-20" placeholder="Escribe una breve descripción del producto..." value={f.descripcion} onChange={set("descripcion")} /></Campo>

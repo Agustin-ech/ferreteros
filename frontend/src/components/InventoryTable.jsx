@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ChevronsUpDown } from 'lucide-react'
+import VerFotoProducto from './VerFotoProducto'
 
 const formatoCOP = new Intl.NumberFormat('es-CO', {
   style: 'currency',
@@ -130,7 +131,7 @@ export default function InventoryTable({ onSelectProduct, filas: filasProp, sucu
                 </button>
               </th>
               <th className="py-3 pr-2 font-medium">Precio</th>
-
+              <th className="py-3 pr-4 font-medium">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -152,12 +153,16 @@ export default function InventoryTable({ onSelectProduct, filas: filasProp, sucu
                 })}
                 <td className="py-3 pr-2 text-gray-200 font-semibold">{p.total}</td>
                 <td className="py-3 pr-2 text-gray-300">{formatoCOP.format(p.precio)}</td>
-
+                <td className="py-3 pr-4">
+                  <div className="flex items-center gap-3 text-gray-400">
+                    <VerFotoProducto producto={p} />
+                  </div>
+                </td>
               </tr>
             ))}
             {filas.length === 0 && (
               <tr>
-                <td colSpan={sucursalOptions.length + 4} className="py-8 text-center text-gray-500 text-sm">
+                <td colSpan={sucursalOptions.length + 5} className="py-8 text-center text-gray-500 text-sm">
                   Ningún producto coincide con esos filtros.
                 </td>
               </tr>

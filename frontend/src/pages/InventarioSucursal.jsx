@@ -4,6 +4,8 @@ import {
 } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import ProductDetailPanel from '../components/ProductDetailPanel'
+import VerFotoProducto from '../components/VerFotoProducto'
+import { resolverImagen } from '../api/productoImagen'
 import ApiState from '../components/ApiState'
 import api from '../api/client'
 import { errorMessage } from '../api/client'
@@ -73,6 +75,7 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
         id: producto.idProducto,
         codigo: producto.codigoSKU,
         nombre: producto.nombre,
+        imagen: resolverImagen(producto.imagenUrl),
         categoria: producto.tipo_producto?.nombre || producto.tipo || 'Sin categoría',
         precio: Number(producto.precio || 0),
         compra: Number(producto.costoUnitario || 0),
@@ -253,6 +256,7 @@ export default function InventarioSucursal({ idSucursal, nombreSucursal }) {
                         <button onClick={() => setProductoSeleccionado(p)} className="hover:text-white" title="Ver y ajustar inventario" aria-label={`Ver y ajustar ${p.nombre}`}>
                           <Pencil size={15} />
                         </button>
+                        <VerFotoProducto producto={p} />
                       </div>
                     </td>
                   </tr>
