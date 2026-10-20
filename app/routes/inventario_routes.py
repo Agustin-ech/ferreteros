@@ -19,6 +19,7 @@ from app.schemas.inventario_schema import (
 from app.services.inventario_service import InventarioService
 from app.utils.decorators import requiere_rol
 from app.utils.roles import normalizar_rol, sucursal_autorizada
+from app.utils.permisos import AJUSTES, requiere_funcion
 
 inventario_bp = Blueprint('inventario_bp', __name__, url_prefix='/api/inventario')
 
@@ -62,6 +63,7 @@ def consultar_existencias():
 @inventario_bp.route('/ajustar', methods=['POST'])
 @jwt_required()
 @requiere_rol('admin', 'bodega')
+@requiere_funcion(AJUSTES)
 def ajustar_inventario():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):

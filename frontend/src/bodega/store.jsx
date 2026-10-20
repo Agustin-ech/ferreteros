@@ -80,6 +80,7 @@ export function BodegaProvider({ children }) {
   const [tiposProducto, setTiposProducto] = useState([]);
   const [unidadesMedida, setUnidadesMedida] = useState([]);
   const [idSucursal, setIdSucursal] = useState(null);
+  const [modulos, setModulos] = useState([]);
   const [nombreSucursal, setNombreSucursal] = useState("");
   const [danados, setDanados] = useState([]);
   const [danadosTotal, setDanadosTotal] = useState(0);
@@ -150,6 +151,8 @@ export function BodegaProvider({ children }) {
         ? sucursalUsuario
         : null;
       setIdSucursal(sucursal);
+      const modulosUsuario = usuario.modulos || [];
+      setModulos(modulosUsuario);
 
       const [productosRes, inventarioRes, catalogosRes, sucursalRes] = await Promise.all([
         api.get("/api/productos", { params: { incluirInactivos: true } }),
@@ -175,9 +178,12 @@ export function BodegaProvider({ children }) {
       );
       setCatalogoProductos(catalogo);
       setProductos(catalogo.filter((producto) => producto.idProducto in inventarioPorProducto));
-      await cargarDanados(1, "", sucursal);
-      await cargarTiposDanio();
-      await cargarRecibidos();
+      // Sin el permiso, el backend responde 403: no se piden para no romper la carga.
+      if (modulosUsuario.includes("MERMAS")) {
+        await cargarDanados(1, "", sucursal);
+        await cargarTiposDanio();
+      }
+      if (modulosUsuario.includes("PRODUCTOS")) await cargarRecibidos();
     } catch (err) {
       setError(mensajeError(err, "No se pudieron cargar los productos e inventario del backend."));
     } finally {
@@ -223,6 +229,7 @@ export function BodegaProvider({ children }) {
     tiposProducto,
     unidadesMedida,
     idSucursal,
+    modulos,
     nombreSucursal,
     danados,
     danadosTotal,

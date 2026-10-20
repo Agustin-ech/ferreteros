@@ -115,6 +115,11 @@ export default function DetalleRol({
 
         <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-3">
           <p className="font-semibold text-white text-sm">Permisos por módulo</p>
+          {(rol.nombre || form.rol || '').toLowerCase().startsWith('admin') && (
+            <p className="rounded-lg bg-brand-yellow/10 px-3 py-2 text-xs text-brand-yellow">
+              El administrador siempre tiene acceso total; estos permisos se aplican a vendedores y bodega.
+            </p>
+          )}
           {funciones.map((funcion) => {
             const activo = form.permisos.includes(funcion.nombre)
             return (

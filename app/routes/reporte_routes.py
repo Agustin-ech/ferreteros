@@ -39,6 +39,7 @@ from app.services.reporte_service import (
 )
 from app.utils.exportadores.csv_export import exportar_csv
 from app.utils.exportadores.pdf_export import exportar_pdf
+from app.utils.permisos import REPORTES, requiere_funcion
 
 reportes_bp = Blueprint("reportes", __name__, url_prefix="/api/v1/reportes")
 
@@ -81,6 +82,7 @@ def listar_sucursales():
 # --------------------------------------------------------------------------- Generación
 @reportes_bp.get("/<string:codigo>")
 @jwt_required()
+@requiere_funcion(REPORTES)
 def generar_reporte(codigo: str):
     """Genera el reporte pedido y lo devuelve en JSON, CSV o PDF."""
     meta = catalogo_metadatos(codigo)

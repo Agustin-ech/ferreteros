@@ -26,6 +26,7 @@ from app.schemas.venta_schema import (
 from app.services.venta_service import VentaService
 from app.utils.decorators import requiere_rol
 from app.utils.roles import normalizar_rol
+from app.utils.permisos import VENTAS, requiere_funcion
 
 venta_bp = Blueprint("venta_bp", __name__, url_prefix="/api/ventas")
 
@@ -68,6 +69,7 @@ def _parametro_fecha(nombre):
 @venta_bp.route("", methods=["POST"])
 @jwt_required()
 @requiere_rol("admin", "vendedor")
+@requiere_funcion(VENTAS)
 def registrar_venta():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
@@ -95,6 +97,7 @@ def registrar_venta():
 @venta_bp.route("", methods=["GET"])
 @jwt_required()
 @requiere_rol("admin", "vendedor")
+@requiere_funcion(VENTAS)
 def listar_ventas():
     try:
         usuario = _usuario_actual()
@@ -146,6 +149,7 @@ def listar_ventas():
 @venta_bp.route("/<int:id_venta>", methods=["GET"])
 @jwt_required()
 @requiere_rol("admin", "vendedor")
+@requiere_funcion(VENTAS)
 def obtener_venta(id_venta):
     venta = VentaService.obtener_venta(id_venta, _usuario_actual())
     if not venta:
@@ -156,6 +160,7 @@ def obtener_venta(id_venta):
 @venta_bp.route("/<int:id_venta>/factura", methods=["GET"])
 @jwt_required()
 @requiere_rol("admin", "vendedor")
+@requiere_funcion(VENTAS)
 def obtener_factura(id_venta):
     factura = VentaService.obtener_factura(id_venta, _usuario_actual())
     if not factura:

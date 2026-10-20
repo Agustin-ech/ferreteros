@@ -9,6 +9,7 @@ from app.models.tipo_producto import TipoProducto
 from app.models.unidad_medida import UnidadMedida
 from app.schemas.producto_schema import ProductoSchema
 from app.utils.auth import roles_required
+from app.utils.permisos import PRODUCTOS, requiere_funcion
 
 producto_bp = Blueprint("productos", __name__, url_prefix="/api/productos")
 producto_schema = ProductoSchema()
@@ -40,6 +41,7 @@ def _referencias_validas(data):
 
 @producto_bp.post("")
 @roles_required("admin", "bodega")
+@requiere_funcion(PRODUCTOS)
 def crear_producto():
     data = producto_schema.load(request.get_json(silent=True))
     if data.get("descuentoPorcentaje") and g.usuario["rol"] != "admin":
@@ -114,6 +116,7 @@ def obtener_producto(producto_id):
 
 @producto_bp.delete("/<int:producto_id>")
 @roles_required("admin", "bodega")
+@requiere_funcion(PRODUCTOS)
 def desactivar_producto(producto_id):
     producto = db.session.get(Producto, producto_id)
     if producto is None:
@@ -126,6 +129,7 @@ def desactivar_producto(producto_id):
 
 @producto_bp.put("/<int:producto_id>")
 @roles_required("admin", "bodega")
+@requiere_funcion(PRODUCTOS)
 def actualizar_producto(producto_id):
     producto = db.session.get(Producto, producto_id)
     if producto is None:
