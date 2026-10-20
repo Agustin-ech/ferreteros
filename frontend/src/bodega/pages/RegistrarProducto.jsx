@@ -3,12 +3,14 @@ import { useBodega } from "../store.jsx";
 import { Titulo, Campo, useAviso } from "../components/ui.jsx";
 import errorMessage from "../../api/errorMessage";
 import { Package } from "lucide-react";
+import SelectorFoto from "../components/SelectorFoto.jsx";
 
 const vacio = { codigo: "", nombre: "", tipo: "", unidad: "", compra: "", venta: "", stock: "", stockMinimo: "5", estado: "Activo", descripcion: "" };
 
 export default function RegistrarProducto() {
   const { catalogoProductos: productos, tiposProducto, unidadesMedida, agregarProducto, cargando } = useBodega();
   const [f, setF] = useState(vacio);
+  const [foto, setFoto] = useState(null);
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [aviso, Aviso] = useAviso();
@@ -29,6 +31,7 @@ export default function RegistrarProducto() {
     try {
       await agregarProducto({
         ...f,
+        foto,
         codigo,
         idTipoProducto: Number(f.tipo),
         idUnidadMedida: Number(f.unidad),
@@ -38,9 +41,10 @@ export default function RegistrarProducto() {
         venta: Number(f.venta),
       });
       setF(vacio);
+      setFoto(null);
       aviso("Producto agregado");
     } catch (err) {
-      if (err.message?.startsWith("El producto se creó,")) setF(vacio);
+      if (err.message?.startsWith("El producto se creó,")) { setF(vacio); setFoto(null); }
       setError(errorMessage(err, "No se pudo guardar el producto."));
     } finally {
       setGuardando(false);
@@ -72,6 +76,10 @@ export default function RegistrarProducto() {
           <Campo label="Stock mínimo"><input type="number" min="0" className="input" value={f.stockMinimo} onChange={set("stockMinimo")} /></Campo>
           <Campo label="Precio de venta" requerido><input type="number" min="0.01" step="0.01" className="input" placeholder="Ej: 15000" value={f.venta} onChange={set("venta")} /></Campo>
           <Campo label="Precio de compra" requerido><input type="number" min="0.01" step="0.01" className="input" placeholder="Ej: 10000" value={f.compra} onChange={set("compra")} /></Campo>
+          <div className="text-sm md:col-span-2">
+            <span className="mb-1 block">Foto del producto</span>
+            <SelectorFoto archivo={foto} onChange={setFoto} onQuitar={() => setFoto(null)} deshabilitado={guardando} />
+          </div>
           <Campo label="Descripción"><textarea className="input h-20" placeholder="Escribe una breve descripción del producto..." value={f.descripcion} onChange={set("descripcion")} /></Campo>
           <Campo label="Estado">
             <select className="input" value={f.estado} onChange={set("estado")}><option>Activo</option><option>Inactivo</option></select>
@@ -80,7 +88,7 @@ export default function RegistrarProducto() {
         {(!tiposProducto.length || !unidadesMedida.length) && <p className="mt-3 text-sm text-amber-400">No hay tipos o unidades activos disponibles en los catálogos del servidor.</p>}
         {error && <p role="alert" className="mt-3 text-sm text-red-400">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
-          <button type="button" className="btn-ghost" onClick={() => { setF(vacio); setError(""); }}>Limpiar</button>
+          <button type="button" className="btn-ghost" onClick={() => { setF(vacio); setFoto(null); setError(""); }}>Limpiar</button>
           <button type="submit" className="btn-primary" disabled={guardando || !tiposProducto.length || !unidadesMedida.length}>
             {guardando ? "Guardando..." : "+ Agregar producto"}
           </button>

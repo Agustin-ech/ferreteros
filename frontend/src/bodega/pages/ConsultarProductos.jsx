@@ -2,12 +2,13 @@ import { useState } from "react";
 import { useBodega, dinero } from "../store.jsx";
 import { Titulo, Badge, Modal, Paginacion, useAviso, useConfirmacion } from "../components/ui.jsx";
 import errorMessage from "../../api/errorMessage";
-import { Search, Eye, Pencil, Trash2 } from "lucide-react";
+import { Search, Eye, Pencil, Trash2, Package } from "lucide-react";
+import SelectorFoto from "../components/SelectorFoto.jsx";
 
 const POR_PAGINA = 8;
 
 export default function ConsultarProductos() {
-  const { productos, actualizarProducto, eliminarProducto } = useBodega();
+  const { productos, actualizarProducto, eliminarProducto, subirFoto, quitarFoto } = useBodega();
   const [q, setQ] = useState("");
   const [busca, setBusca] = useState("");
   const [pagina, setPagina] = useState(1);
@@ -33,7 +34,9 @@ const abrir = (p, edit) => {
       venta: p.venta, 
       compra: p.compra, 
       estado: p.estado, 
-      motivo: "" 
+      motivo: "",
+      foto: null,
+      quitarFoto: false,
     });
   };
 
@@ -60,6 +63,8 @@ const abrir = (p, edit) => {
         estado: borrador.estado,
         motivo: borrador.motivo,
       });
+      if (borrador.foto) await subirFoto(sel.codigo, borrador.foto);
+      else if (borrador.quitarFoto && sel.imagen) await quitarFoto(sel.codigo);
       setSel(null);
       aviso("Producto actualizado");
     } catch (err) {
@@ -96,7 +101,15 @@ const abrir = (p, edit) => {
           <tbody>
             {visibles.map((p) => (
               <tr key={p.codigo}>
-                <td className="td">{p.codigo}</td><td className="td">{p.nombre}</td><td className="td">{p.tipo}</td>
+                <td className="td">{p.codigo}</td>
+                <td className="td">
+                  <div className="flex items-center gap-2">
+                    <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md border border-[#2a2a2a] bg-[#141414]">
+                      {p.imagen ? <img src={p.imagen} alt="" className="h-full w-full object-cover" /> : <Package size={16} className="text-gray-500" />}
+                    </div>
+                    {p.nombre}
+                  </div>
+                </td><td className="td">{p.tipo}</td>
                 <td className="td">{p.unidad}</td><td className="td">{p.stock}</td><td className="td">{dinero(p.venta)}</td>
                 <td className="td"><Badge texto={p.estado} /></td>
                 <td className="td whitespace-nowrap">
@@ -117,7 +130,18 @@ const abrir = (p, edit) => {
           {editando ? (
             <div className="space-y-3 text-sm">
 
-{/* Campos numéricos: Stock, Precio de venta, Precio de compra */}
+{/* Foto del producto */}
+              <div>
+                <span className="mb-1 block">Foto del producto</span>
+                <SelectorFoto
+                  archivo={borrador.foto}
+                  urlActual={borrador.quitarFoto ? null : sel.imagen}
+                  onChange={(f) => setBorrador({ ...borrador, foto: f, quitarFoto: false })}
+                  onQuitar={() => setBorrador({ ...borrador, foto: null, quitarFoto: true })}
+                />
+              </div>
+
+              {/* Campos numéricos: Stock, Precio de venta, Precio de compra */}
               {[["Stock", "stock"], ["Precio de venta", "venta"], ["Precio de compra", "compra"]].map(([l, k]) => (
                 <label key={k} className="block">
                   {l}
@@ -162,6 +186,10 @@ const abrir = (p, edit) => {
               <div className="flex justify-end gap-2"><button className="btn-ghost" onClick={() => setSel(null)}>Cancelar</button><button className="btn-primary" onClick={guardar}>Guardar cambios</button></div>
             </div>
           ) : (
+            <div>
+              <div className="mb-3 grid h-40 w-full place-items-center overflow-hidden rounded-lg border border-[#2a2a2a] bg-[#141414]">
+                {sel.imagen ? <img src={sel.imagen} alt={sel.nombre} className="h-full w-full object-contain" /> : <Package size={40} className="text-gray-500" />}
+              </div>
             <dl className="grid grid-cols-2 gap-2 text-sm">
               {[["Tipo", sel.tipo], ["Unidad", sel.unidad], ["Stock", sel.stock], ["Stock mínimo", sel.stockMinimo],
                 ["Precio de compra", dinero(sel.compra)], ["Precio de venta", dinero(sel.venta)], ["Estado", sel.estado]].map(([k, v]) => (
@@ -169,6 +197,7 @@ const abrir = (p, edit) => {
               ))}
               {sel.descripcion && <div className="col-span-2"><dt className="text-xs text-gray-400">Descripción</dt><dd>{sel.descripcion}</dd></div>}
             </dl>
+            </div>
           )}
         </Modal>
       )}
