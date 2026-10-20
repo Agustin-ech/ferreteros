@@ -17,6 +17,9 @@ class Producto(db.Model):
     # Descuento que define el administrador; se aplica solo al registrar la venta.
     descuentoPorcentaje = db.Column(db.Numeric(5, 2), default=0, server_default="0", nullable=False)
 
+    # URL pública de la foto (el archivo vive en Supabase Storage).
+    imagenUrl = db.Column(db.String(500), nullable=True)
+
     # Columnas de soporte
     activo = db.Column(db.Boolean, default=True, nullable=False)
     fecha_creacion = db.Column(
@@ -49,6 +52,7 @@ class Producto(db.Model):
             "stockMinimo": self.stockMinimo,
             "descuentoPorcentaje": float(self.descuentoPorcentaje or 0),
             "activo": self.activo,
+            "imagenUrl": self.imagenUrl,
             "fecha_creacion": self.fecha_creacion.isoformat(),
         }
 

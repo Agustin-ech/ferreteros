@@ -6,6 +6,7 @@ import ProductDetailPanel from '../components/ProductDetailPanel'
 import ApiState from '../components/ApiState'
 import api from '../api/client'
 import { errorMessage } from '../api/client'
+import { resolverImagen } from '../api/productoImagen'
 
 const formatoCOP = new Intl.NumberFormat('es-CO', {
   style: 'currency',
@@ -92,6 +93,7 @@ export default function InventarioGlobal({ productoParaBusqueda, onProductoAbier
         id: producto.idProducto,
         codigo: producto.codigoSKU,
         nombre: producto.nombre,
+        imagen: resolverImagen(producto.imagenUrl),
         categoria: tiposProducto.find((tipo) => tipo.idTipoProducto === producto.idTipoProducto)?.nombre || 'Sin categoría',
         precio: Number(producto.precio || 0),
         compra: Number(producto.costoUnitario || 0),

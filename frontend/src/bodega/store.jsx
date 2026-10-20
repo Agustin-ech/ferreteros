@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import api from "../api/client";
 import { errorMessage } from "../api/client";
+import { quitarImagenProducto, resolverImagen, subirImagenProducto } from "../api/productoImagen";
 
 // Fecha local (no UTC): con toISOString() después de las 7 p. m. en
 // Colombia ya saldría el día siguiente.
@@ -68,6 +69,7 @@ const normalizarProducto = (producto, stockDisponible = 0, tipos = [], unidades 
     stockMinimo: producto.stockMinimo ?? 5,
     codigoSKU: codigo,
     activo: producto.activo !== false,
+    imagen: resolverImagen(producto.imagenUrl),
   };
 };
 
@@ -287,7 +289,34 @@ export function BodegaProvider({ children }) {
           throw new Error(`El producto se creó, pero no se pudo registrar su stock inicial: ${detalle}`);
         }
       }
-      return productoNormalizado;
+      let resultado = productoNormalizado;
+      if (p.foto) {
+        try {
+          const conFoto = await subirImagenProducto(productoNormalizado.idProducto, p.foto);
+          resultado = normalizarProducto(conFoto, numero(p.stock, 0), tiposProducto, unidadesMedida);
+          setProductos((ps) => ps.map((x) => (x.idProducto === resultado.idProducto ? resultado : x)));
+        } catch (err) {
+          const detalle = err?.response?.data?.error || err.message;
+          throw new Error(`El producto se creó, pero no se pudo subir la foto: ${detalle}`);
+        }
+      }
+      return resultado;
+    },
+    subirFoto: async (codigo, archivo) => {
+      const producto = productos.find((x) => x.codigo === codigo);
+      if (!producto) throw new Error("No se encontró el producto seleccionado.");
+      const data = await subirImagenProducto(producto.idProducto, archivo);
+      const actualizado = { ...producto, imagen: resolverImagen(data.imagenUrl) };
+      setProductos((ps) => ps.map((x) => (x.idProducto === producto.idProducto ? actualizado : x)));
+      return actualizado;
+    },
+    quitarFoto: async (codigo) => {
+      const producto = productos.find((x) => x.codigo === codigo);
+      if (!producto) throw new Error("No se encontró el producto seleccionado.");
+      await quitarImagenProducto(producto.idProducto);
+      const actualizado = { ...producto, imagen: null };
+      setProductos((ps) => ps.map((x) => (x.idProducto === producto.idProducto ? actualizado : x)));
+      return actualizado;
     },
     actualizarProducto: async (codigo, cambios) => {
       const producto = productos.find((p) => p.codigo === codigo);

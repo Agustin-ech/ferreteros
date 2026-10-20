@@ -24,6 +24,7 @@ class ProductoSchema(Schema):
     )
     precioConDescuento = fields.Method("precio_con_descuento", dump_only=True)
     activo = fields.Bool()
+    imagenUrl = fields.Str(dump_only=True, allow_none=True)
     fecha_creacion = fields.DateTime(dump_only=True)
 
     def precio_con_descuento(self, producto):

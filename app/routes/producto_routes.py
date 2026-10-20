@@ -8,12 +8,27 @@ from app.models.producto import Producto
 from app.models.tipo_producto import TipoProducto
 from app.models.unidad_medida import UnidadMedida
 from app.schemas.producto_schema import ProductoSchema
+from app.services.almacenamiento_service import AlmacenamientoError, borrar_foto, subir_foto
 from app.utils.auth import roles_required
 from app.utils.permisos import PRODUCTOS, requiere_funcion
 
 producto_bp = Blueprint("productos", __name__, url_prefix="/api/productos")
 producto_schema = ProductoSchema()
 productos_schema = ProductoSchema(many=True)
+
+
+MAX_BYTES_IMAGEN = 2 * 1024 * 1024  # 2 MB
+
+
+def _tipo_imagen(contenido: bytes):
+    """Detecta el tipo real mirando los primeros bytes (no confía en el cliente)."""
+    if contenido.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if contenido.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if contenido[:4] == b"RIFF" and contenido[8:12] == b"WEBP":
+        return "image/webp"
+    return None
 
 
 def _error(mensaje, codigo):
@@ -161,4 +176,49 @@ def actualizar_producto(producto_id):
     except IntegrityError:
         db.session.rollback()
         return _error("No se pudo actualizar el producto por un conflicto de datos.", 409)
+    return jsonify(producto_schema.dump(producto)), 200
+
+
+@producto_bp.post("/<int:producto_id>/imagen")
+@roles_required("admin", "bodega")
+def subir_imagen_producto(producto_id):
+    producto = db.session.get(Producto, producto_id)
+    if producto is None:
+        return _error("El producto no existe.", 404)
+
+    archivo = request.files.get("imagen")
+    if archivo is None:
+        return _error("Envía la foto en el campo \"imagen\".", 400)
+
+    contenido = archivo.read(MAX_BYTES_IMAGEN + 1)
+    if not contenido:
+        return _error("El archivo está vacío.", 400)
+    if len(contenido) > MAX_BYTES_IMAGEN:
+        return _error("La foto supera el tamaño máximo de 2 MB.", 413)
+    mime = _tipo_imagen(contenido)
+    if mime is None:
+        return _error("Formato no válido. Usa una imagen JPG, PNG o WEBP.", 400)
+
+    try:
+        nueva_url = subir_foto(producto.idProducto, contenido, mime)
+    except AlmacenamientoError as error:
+        return _error(str(error), 502)
+
+    anterior = producto.imagenUrl
+    producto.imagenUrl = nueva_url
+    db.session.commit()
+    borrar_foto(anterior)
+    return jsonify(producto_schema.dump(producto)), 200
+
+
+@producto_bp.delete("/<int:producto_id>/imagen")
+@roles_required("admin", "bodega")
+def quitar_imagen_producto(producto_id):
+    producto = db.session.get(Producto, producto_id)
+    if producto is None:
+        return _error("El producto no existe.", 404)
+    anterior = producto.imagenUrl
+    producto.imagenUrl = None
+    db.session.commit()
+    borrar_foto(anterior)
     return jsonify(producto_schema.dump(producto)), 200
