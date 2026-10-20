@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from marshmallow import ValidationError
+from sqlalchemy import func, or_
 from app.models.usuario import Usuario
 from app.extensions import db
 from app.schemas.usuario_schema import carga_usuario, login_schema, usuario_schema
@@ -19,11 +20,19 @@ def login():
     except ValidationError as err:
         return jsonify({"errores": err.messages}), 400
 
-    primer_nombre = data_validada["primerNombre"]
+    identificador = data_validada["usuario"].strip()
     password = data_validada["password"]
 
-    # 2. Consultar el usuario en la base de datos
-    usuario = Usuario.query.options(*carga_usuario()).filter_by(primerNombre=primer_nombre).first()
+    # 2. Buscar por correo o por número de documento (ambos únicos).
+    #    El correo se compara sin mayúsculas: hay registros antiguos que las tienen.
+    usuario = (
+        Usuario.query.options(*carga_usuario())
+        .filter(or_(
+            func.lower(Usuario.correoElectronico) == identificador.lower(),
+            Usuario.numeroDocumento == identificador,
+        ))
+        .first()
+    )
 
     # 3. Validar existencia y hash de contraseña
     if not usuario or not usuario.check_password(password):

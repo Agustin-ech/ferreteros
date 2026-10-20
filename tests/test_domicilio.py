@@ -8,6 +8,7 @@ from app import create_app
 from app.extensions import db
 from app.models.cliente import Cliente
 from app.models.detalle_venta import DetalleVenta
+from app.models.domicilio import Domicilio
 from app.models.entrega import Entrega
 from app.models.factura import Factura
 from app.models.inventario import Inventario
@@ -31,7 +32,7 @@ def app():
 	tables = [
 			Cliente.__table__, Sucursal.__table__, Producto.__table__, Inventario.__table__,
 			TipoVenta.__table__, MetodoPago.__table__, Venta.__table__, DetalleVenta.__table__,
-			Factura.__table__, Entrega.__table__, TipoMovimiento.__table__,
+			Factura.__table__, Entrega.__table__, Domicilio.__table__, TipoMovimiento.__table__,
 	]
 	with application.app_context():
 		db.metadata.create_all(bind=db.engine, tables=tables)
@@ -144,6 +145,12 @@ def test_domicilio_fuera_del_barrio_cobra_envio_en_factura_y_descuenta_stock(app
 		assert venta.total == Decimal("55000.00")
 		assert db.session.query(Factura).count() == 1
 		assert db.session.query(Entrega).count() == 1
+		domicilio = db.session.query(Domicilio).one()
+		assert domicilio.idEntrega == db.session.query(Entrega).one().idEntrega
+		assert domicilio.montoEsperado == Decimal("55000.00")
+		assert domicilio.montoRecibido == Decimal("0.00")
+		assert domicilio.desbalance == Decimal("55000.00")
+		assert domicilio.horaRecepcionPago is None
 		assert db.session.get(Inventario, 1).CantidadDisponible == Decimal("8.00")
 
 
@@ -211,4 +218,5 @@ def test_error_de_entrega_revierte_venta_factura_y_stock(app, monkeypatch):
 		assert db.session.query(Venta).count() == 0
 		assert db.session.query(Factura).count() == 0
 		assert db.session.query(Entrega).count() == 0
+		assert db.session.query(Domicilio).count() == 0
 		assert db.session.get(Inventario, 1).CantidadDisponible == Decimal("10.00")

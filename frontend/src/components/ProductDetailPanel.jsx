@@ -204,10 +204,10 @@ export default function ProductDetailPanel({
           <p className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
             <Boxes size={14} className="text-brand-yellow" /> Stock por Sucursal
           </p>
-          <div className="grid grid-cols-3 text-sm gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 text-sm gap-2">
             {stockPorSucursal.map((sucursal) => (
-              <div key={sucursal.nombre}>
-                <p className="text-xs text-gray-500">{sucursal.nombre}</p>
+              <div key={sucursal.nombre} className="min-w-0">
+                <p className="text-xs text-gray-500 break-words">{sucursal.nombre}</p>
                 <p className="font-semibold text-white">{sucursal.valor}</p>
               </div>
             ))}

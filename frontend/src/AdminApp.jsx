@@ -95,6 +95,7 @@ const paginas = {
 
 export default function AdminApp({ onLogout }) {
   const [activePage, setActivePage] = useState('inicio')
+  const [menuAbierto, setMenuAbierto] = useState(false)
   const [sucursales, setSucursales] = useState([])
   const [cargandoSucursales, setCargandoSucursales] = useState(true)
   const [errorSucursales, setErrorSucursales] = useState('')
@@ -277,12 +278,18 @@ export default function AdminApp({ onLogout }) {
 
   return (
     <div className="min-h-screen flex bg-panel-bg text-gray-200">
-      <Sidebar activePage={activePage} onNavigate={setActivePage} sucursales={sucursales} />
+      <Sidebar
+        activePage={activePage}
+        onNavigate={setActivePage}
+        sucursales={sucursales}
+        abierto={menuAbierto}
+        onCerrar={() => setMenuAbierto(false)}
+      />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <Header onLogout={onLogout} onSelectProduct={abrirProductoDesdeBusqueda} />
+        <Header onLogout={onLogout} onSelectProduct={abrirProductoDesdeBusqueda} onAbrirMenu={() => setMenuAbierto(true)} />
 
-        <main className="flex-1 p-6 overflow-y-auto">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto">
           <Suspense fallback={<p role="status" className="text-sm text-gray-400">Cargando...</p>}>
           {['empleados', 'nuevo-empleado', 'roles-permisos'].includes(activePage) && (
             <div className="mb-4">

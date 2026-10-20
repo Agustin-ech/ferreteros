@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  Home, Package, FileText, DollarSign, BarChart2, Users, Truck, ChevronDown,
+  Home, Package, FileText, DollarSign, BarChart2, Users, Truck, ChevronDown, X,
 } from 'lucide-react'
 import { menuItems } from '../data/menu'
 import logo from '../assets/logo.png'
@@ -12,7 +12,7 @@ const iconMap = { Home, Package, FileText, DollarSign, BarChart2, Users, Truck }
 // - { label, page } -> hoja que navega a una página
 // - { label, children } -> submenú que se puede expandir
 // El componente se llama a sí mismo para soportar cualquier nivel de anidación.
-function SubmenuNode({ item, activePage, onNavigate }) {
+function SubmenuNode({ item, activePage, onNavigate, onCerrar }) {
   const [isOpen, setIsOpen] = useState(false)
 
   if (typeof item === 'string') {
@@ -28,7 +28,7 @@ function SubmenuNode({ item, activePage, onNavigate }) {
     const isActive = activePage === item.page
     return (
       <button
-        onClick={() => onNavigate(item.page)}
+        onClick={() => { onNavigate(item.page); onCerrar?.() }}
         className={`text-left text-[13px] py-1.5 transition-colors w-full ${
           isActive ? 'text-brand-yellow font-semibold' : 'text-gray-400 hover:text-brand-yellow'
         }`}
@@ -72,6 +72,7 @@ function SubmenuNode({ item, activePage, onNavigate }) {
               item={child}
               activePage={activePage}
               onNavigate={onNavigate}
+              onCerrar={onCerrar}
             />
           ))}
         </div>
@@ -80,7 +81,9 @@ function SubmenuNode({ item, activePage, onNavigate }) {
   )
 }
 
-export default function Sidebar({ activePage, onNavigate, sucursales = [] }) {
+// En pantallas grandes el menú está fijo; en celular y tablet se abre como
+// panel deslizable desde el botón ☰ del Header (`abierto` / `onCerrar`).
+export default function Sidebar({ activePage, onNavigate, sucursales = [], abierto = false, onCerrar }) {
   const [openMenu, setOpenMenu] = useState('Inventario')
   const paginasPorSucursal = { Inventario: 'inventario-sucursal', Facturas: 'facturas-sucursal' }
   const items = menuItems.map((item) => !paginasPorSucursal[item.label] ? item : ({
@@ -95,13 +98,29 @@ export default function Sidebar({ activePage, onNavigate, sucursales = [] }) {
   }))
 
   return (
-    <aside className="hidden lg:flex w-64 shrink-0 flex-col bg-panel-sidebar border-r border-panel-border">
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-panel-border">
-        <img src={logo} alt="Ferretería Ferreteros S.A." className="h-10 w-10 rounded-full object-contain bg-white" />
-        <div className="leading-tight">
-          <p className="text-sm font-bold text-white">Ferretería</p>
-          <p className="text-sm font-bold text-brand-yellow -mt-0.5">Ferreteros S.A.</p>
+    <>
+    {abierto && (
+      <button
+        type="button"
+        aria-label="Cerrar menú"
+        onClick={onCerrar}
+        className="fixed inset-0 z-30 bg-black/60 lg:hidden"
+      />
+    )}
+    <aside className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-panel-sidebar border-r border-panel-border transition-transform lg:static lg:translate-x-0 ${
+      abierto ? 'translate-x-0' : '-translate-x-full'
+    }`}>
+      <div className="flex items-center justify-between gap-3 px-5 py-5 border-b border-panel-border">
+        <div className="flex items-center gap-3">
+          <img src={logo} alt="Ferretería Ferreteros S.A." className="h-10 w-10 rounded-full object-contain bg-white" />
+          <div className="leading-tight">
+            <p className="text-sm font-bold text-white">Ferretería</p>
+            <p className="text-sm font-bold text-brand-yellow -mt-0.5">Ferreteros S.A.</p>
+          </div>
         </div>
+        <button type="button" aria-label="Cerrar menú" onClick={onCerrar} className="text-gray-400 hover:text-white lg:hidden">
+          <X size={18} />
+        </button>
       </div>
 
       <p className="px-5 pt-4 pb-2 text-[11px] tracking-wide text-gray-500">Menu</p>
@@ -115,6 +134,9 @@ export default function Sidebar({ activePage, onNavigate, sucursales = [] }) {
           function handleClick() {
             if (item.children) setOpenMenu(isSubmenuOpen ? null : item.label)
             if (item.page) onNavigate(item.page)
+            // En celular el menú se cierra al llegar a una página final; los
+            // grupos se quedan abiertos para poder elegir una sub-opción.
+            if (!item.children) onCerrar?.()
           }
 
           return (
@@ -145,6 +167,7 @@ export default function Sidebar({ activePage, onNavigate, sucursales = [] }) {
                       item={child}
                       activePage={activePage}
                       onNavigate={onNavigate}
+                      onCerrar={onCerrar}
                     />
                   ))}
                 </div>
@@ -154,5 +177,6 @@ export default function Sidebar({ activePage, onNavigate, sucursales = [] }) {
         })}
       </nav>
     </aside>
+    </>
   )
 }

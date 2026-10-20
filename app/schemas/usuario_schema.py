@@ -1,4 +1,4 @@
-from marshmallow import Schema, fields, validate, validates, ValidationError
+from marshmallow import Schema, fields, pre_load, validate, validates, ValidationError
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.models.sucursal_usuario import SucursalUsuario
@@ -21,17 +21,19 @@ def carga_usuario():
 
 class LoginSchema(Schema):
 
-    primerNombre = fields.Str(
+    # Correo o número de documento: los dos son únicos. Antes se usaba el
+    # primer nombre, que se repite entre empleados.
+    usuario = fields.Str(
         required=True,
         allow_none=False,
         validate=validate.Length(
             min=1,
             max=150,
-            error="El primer nombre debe tener entre 1 y 150 caracteres.",
+            error="El usuario debe tener entre 1 y 150 caracteres.",
         ),
         error_messages={
-            "required": "El campo 'primerNombre' es obligatorio.",
-            "null": "El campo 'primerNombre' no puede ser nulo.",
+            "required": "Escribe tu correo o número de documento.",
+            "null": "Escribe tu correo o número de documento.",
         },
     )
 
@@ -56,10 +58,18 @@ class LoginSchema(Schema):
         validate=validate.Range(min=1),
     )
 
-    @validates("primerNombre")
-    def validar_primer_nombre_no_vacio(self, value, **kwargs):
+    @pre_load
+    def aceptar_campo_anterior(self, data, **kwargs):
+        # Un frontend sin actualizar todavía envía "primerNombre".
+        if isinstance(data, dict) and "usuario" not in data and "primerNombre" in data:
+            data = {**data, "usuario": data["primerNombre"]}
+            data.pop("primerNombre")
+        return data
+
+    @validates("usuario")
+    def validar_usuario_no_vacio(self, value, **kwargs):
         if not value.strip():
-            raise ValidationError("El campo 'primerNombre' no puede estar vacío.")
+            raise ValidationError("Escribe tu correo o número de documento.")
 
     @validates("password")
     def validar_password_no_vacio(self, value, **kwargs):

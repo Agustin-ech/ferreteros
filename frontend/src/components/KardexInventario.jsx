@@ -4,6 +4,9 @@ import api from '../api/client'
 
 const formatoCantidad = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 3 })
 const POR_PAGINA = 50
+// Clases explícitas: `.input` solo existe dentro de los paneles de bodega y
+// vendedor (.role-panel), y este componente también se usa en el admin.
+const campoFiltro = 'mt-1 w-full rounded-lg border border-panel-border bg-panel-bg px-3 py-2 text-sm text-gray-200 outline-none [color-scheme:dark] focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow'
 
 export default function KardexInventario({ sucursales = [], idSucursalFija = null }) {
   const [productos, setProductos] = useState([])
@@ -88,7 +91,7 @@ export default function KardexInventario({ sucursales = [], idSucursalFija = nul
         {!idSucursalFija && (
           <label className="text-xs text-gray-400">
             Sucursal
-            <select className="input mt-1 w-full" value={filtros.sucursal} onChange={(e) => cambiarFiltro('sucursal', e.target.value)}>
+            <select className={campoFiltro} value={filtros.sucursal} onChange={(e) => cambiarFiltro('sucursal', e.target.value)}>
               <option value="">Todas las sucursales</option>
               {sucursales.map((sucursal) => (
                 <option key={sucursal.idSucursal} value={sucursal.idSucursal}>{sucursal.nombreSucursal}</option>
@@ -98,7 +101,7 @@ export default function KardexInventario({ sucursales = [], idSucursalFija = nul
         )}
         <label className="text-xs text-gray-400">
           Producto
-          <select className="input mt-1 w-full" value={filtros.producto} onChange={(e) => cambiarFiltro('producto', e.target.value)}>
+          <select className={campoFiltro} value={filtros.producto} onChange={(e) => cambiarFiltro('producto', e.target.value)}>
             <option value="">Todos los productos</option>
             {productos.map((producto) => (
               <option key={producto.idProducto} value={producto.idProducto}>
@@ -109,7 +112,7 @@ export default function KardexInventario({ sucursales = [], idSucursalFija = nul
         </label>
         <label className="text-xs text-gray-400">
           Movimiento
-          <select className="input mt-1 w-full" value={filtros.tipo} onChange={(e) => cambiarFiltro('tipo', e.target.value)}>
+          <select className={campoFiltro} value={filtros.tipo} onChange={(e) => cambiarFiltro('tipo', e.target.value)}>
             <option value="">Entradas y salidas</option>
             <option value="Entrada">Entradas</option>
             <option value="Salida">Salidas</option>
@@ -117,11 +120,11 @@ export default function KardexInventario({ sucursales = [], idSucursalFija = nul
         </label>
         <label className="text-xs text-gray-400">
           Desde
-          <input className="input mt-1 w-full" type="date" value={filtros.desde} onChange={(e) => cambiarFiltro('desde', e.target.value)} />
+          <input className={campoFiltro} type="date" value={filtros.desde} onChange={(e) => cambiarFiltro('desde', e.target.value)} />
         </label>
         <label className="text-xs text-gray-400">
           Hasta
-          <input className="input mt-1 w-full" type="date" value={filtros.hasta} onChange={(e) => cambiarFiltro('hasta', e.target.value)} />
+          <input className={campoFiltro} type="date" value={filtros.hasta} onChange={(e) => cambiarFiltro('hasta', e.target.value)} />
         </label>
       </div>
 
