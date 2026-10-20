@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Package, Boxes, History, ChevronRight, Save } from 'lucide-react'
 import api from '../api/client'
 import { errorMessage } from '../api/client'
@@ -55,6 +55,12 @@ export default function ProductDetailPanel({
   const [costoCompra, setCostoCompra] = useState(String(producto.compra ?? 0))
   const [descuento, setDescuento] = useState(String(producto.descuentoPorcentaje ?? 0))
   const [mensaje, setMensaje] = useState('')
+  // En pantallas angostas el panel queda debajo de toda la tabla: se lleva a la
+  // vista al abrirlo para que no parezca que el clic no hizo nada.
+  const panelRef = useRef(null)
+  useEffect(() => {
+    if (window.matchMedia('(max-width: 1023px)').matches) panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [producto.id])
   const [esError, setEsError] = useState(false)
 
   useEffect(() => {
@@ -176,7 +182,7 @@ export default function ProductDetailPanel({
   }
 
   return (
-    <div className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-4 h-fit">
+    <div ref={panelRef} className="bg-panel-card border border-panel-border rounded-xl p-4 flex flex-col gap-4 h-fit scroll-mt-4">
       <button
         onClick={onVolver}
         className="flex items-center gap-1.5 text-sm text-brand-yellow hover:underline w-fit"

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { FiCheck, FiRotateCcw, FiSearch } from 'react-icons/fi'
 import { listarCatalogosVenta, listarVentas, registrarDevolucion } from '../../api/vendedor'
+import { ESTADO, listarCola } from '../../offline/colaVentas'
 
 function mensajeError(error) {
   return error.response?.data?.mensaje
@@ -32,12 +33,12 @@ export default function RegistrarDevolucionIntegrada() {
     setConfirmacion('')
     setVenta(null)
     setSeleccion({})
-    if (!numeroFactura.trim()) return setError('Escribe el número de factura.')
+    if (!numeroFactura.trim()) return setError('Escribe el número de factura o del comprobante provisional.')
     setBuscando(true)
     try {
       const { data } = await listarVentas({ factura: numeroFactura.trim(), pagina: 1, por_pagina: 1 })
       if (!data.data?.length) {
-        setError('No se encontró una venta visible con ese número de factura.')
+        setError(await mensajeNoEncontrada(numeroFactura.trim()))
         return
       }
       setVenta(data.data[0])
@@ -46,6 +47,20 @@ export default function RegistrarDevolucionIntegrada() {
     } finally {
       setBuscando(false)
     }
+  }
+
+  // Un comprobante provisional que aún está en este dispositivo no existe en el
+  // servidor todavía: se explica en vez de decir solo "no se encontró".
+  async function mensajeNoEncontrada(numero) {
+    const pendiente = (await listarCola().catch(() => []))
+      .find((item) => item.payload.comprobanteProvisional?.toUpperCase() === numero.toUpperCase())
+    if (pendiente?.estado === ESTADO.pendiente) {
+      return 'Esa venta se hizo sin conexión y aún no se ha enviado al servidor. La devolución se podrá registrar cuando se sincronice (revisa el aviso "por enviar" arriba).'
+    }
+    if (pendiente?.estado === ESTADO.revision) {
+      return 'Esa venta se hizo sin conexión y el servidor la rechazó, así que no quedó registrada. Revisa el aviso "con problema" arriba antes de hacer la devolución.'
+    }
+    return 'No se encontró una venta visible con ese número de factura o comprobante.'
   }
 
   async function enviarDevolucion(evento) {
@@ -89,8 +104,8 @@ export default function RegistrarDevolucionIntegrada() {
       </header>
 
       <form onSubmit={buscarFactura} className="flex flex-col gap-3 border-y border-[#2a2a2a] py-5 sm:flex-row">
-        <label className="flex-1 text-xs text-gray-400">Número de factura
-          <input value={numeroFactura} onChange={(evento) => setNumeroFactura(evento.target.value)} className="mt-1 w-full border border-[#333] bg-[#1f1f1f] px-3 py-2 text-sm text-white" placeholder="FAC-..." />
+        <label className="flex-1 text-xs text-gray-400">Número de factura o comprobante provisional
+          <input value={numeroFactura} onChange={(evento) => setNumeroFactura(evento.target.value)} className="mt-1 w-full border border-[#333] bg-[#1f1f1f] px-3 py-2 text-sm text-white" placeholder="FAC-... u OFF-..." />
         </label>
         <button disabled={buscando} className="mt-auto flex items-center justify-center gap-2 bg-[#F2B01E] px-5 py-2 text-sm font-semibold text-black disabled:opacity-60"><FiSearch /> {buscando ? 'Buscando...' : 'Buscar factura'}</button>
       </form>
@@ -100,7 +115,8 @@ export default function RegistrarDevolucionIntegrada() {
 
       {venta && <form onSubmit={enviarDevolucion} className="space-y-5">
         <div className="flex flex-wrap justify-between gap-2 text-sm text-gray-300">
-          <span>Factura <strong className="text-white">{venta.factura.numeroFactura}</strong></span>
+          <span>Factura <strong className="text-white">{venta.factura.numeroFactura}</strong>
+            {venta.comprobanteProvisional && <span className="text-amber-300"> · comprobante provisional {venta.comprobanteProvisional}</span>}</span>
           <span>Venta #{venta.idVenta} · {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(venta.total)}</span>
         </div>
         <div className="overflow-x-auto border-y border-[#2a2a2a]">

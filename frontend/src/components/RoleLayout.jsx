@@ -4,6 +4,7 @@ import {
 } from 'lucide-react'
 import logo from '../assets/logo.png'
 import CambiarPassword from './CambiarPassword'
+import EstadoConexion from '../offline/EstadoConexion'
 
 function NavigationItem({ item, activePage, onNavigate, onSelect }) {
   const [isOpen, setIsOpen] = useState(Boolean(
@@ -163,6 +164,7 @@ export default function RoleLayout({
               </div>
               <span className="hidden text-sm font-medium text-gray-200 sm:block">{roleName}</span>
             </div>
+            <EstadoConexion />
             <CambiarPassword />
             {onLogout && (
               <button

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronsUpDown } from 'lucide-react'
+import { ChevronsUpDown, Pencil } from 'lucide-react'
 import VerFotoProducto from './VerFotoProducto'
 
 const formatoCOP = new Intl.NumberFormat('es-CO', {
@@ -155,6 +155,15 @@ export default function InventoryTable({ onSelectProduct, filas: filasProp, sucu
                 <td className="py-3 pr-2 text-gray-300">{formatoCOP.format(p.precio)}</td>
                 <td className="py-3 pr-4">
                   <div className="flex items-center gap-3 text-gray-400">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onSelectProduct(p) }}
+                      className="hover:text-white"
+                      title="Editar precios e inventario"
+                      aria-label={`Editar ${p.nombre}`}
+                    >
+                      <Pencil size={15} />
+                    </button>
                     <VerFotoProducto producto={p} />
                   </div>
                 </td>

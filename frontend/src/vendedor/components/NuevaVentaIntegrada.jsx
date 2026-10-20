@@ -10,6 +10,10 @@ import {
   registrarDomicilio,
   registrarVenta,
 } from '../../api/vendedor'
+import api from '../../api/client'
+import { actualizarCache, esErrorDeRed } from '../../offline/cacheConsultas'
+import { encolarVenta, nuevoComprobanteProvisional, nuevoIdOperacion } from '../../offline/colaVentas'
+import ComprobanteProvisional from '../../offline/ComprobanteProvisional'
 
 const moneda = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 
@@ -36,10 +40,11 @@ function PrecioProducto({ producto }) {
 }
 
 function mensajeError(error) {
+  if (esErrorDeRed(error)) return 'Sin conexión con el servidor.'
   return error.response?.data?.mensaje || error.response?.data?.error || 'No se pudo completar la operación.'
 }
 
-export default function NuevaVentaIntegrada({ idSucursal, puedeDomicilio = true }) {
+export default function NuevaVentaIntegrada({ idSucursal, idUsuario, puedeDomicilio = true }) {
   const [catalogos, setCatalogos] = useState({ tiposVenta: [], metodosPago: [], tiposDocumento: [] })
   const [productosEncontrados, setProductosEncontrados] = useState([])
   const [consultaProducto, setConsultaProducto] = useState('')
@@ -68,6 +73,17 @@ export default function NuevaVentaIntegrada({ idSucursal, puedeDomicilio = true 
   // idProducto -> cantidad disponible en la sucursal del vendedor.
   const [existencias, setExistencias] = useState(null)
   const [versionInventario, setVersionInventario] = useState(0)
+  // Catálogo completo guardado: sin internet la búsqueda se hace aquí.
+  const [catalogoProductos, setCatalogoProductos] = useState([])
+  const [comprobante, setComprobante] = useState(null)
+
+  useEffect(() => {
+    let vigente = true
+    api.get('/api/productos')
+      .then(({ data }) => { if (vigente) setCatalogoProductos(data.filter((producto) => producto.activo !== false)) })
+      .catch(() => {})
+    return () => { vigente = false }
+  }, [])
 
   useEffect(() => {
     let vigente = true
@@ -105,15 +121,22 @@ export default function NuevaVentaIntegrada({ idSucursal, puedeDomicilio = true 
       setProductosEncontrados([])
       return () => { vigente = false }
     }
-    buscarProductos(consultaProducto.trim())
+    const texto = consultaProducto.trim()
+    buscarProductos(texto)
       .then(({ data }) => {
         if (vigente) setProductosEncontrados(data.filter((producto) => producto.activo !== false))
       })
       .catch((err) => {
-        if (vigente) setError(mensajeError(err))
+        if (!vigente) return
+        if (esErrorDeRed(err)) {
+          const t = texto.toLowerCase()
+          setProductosEncontrados(catalogoProductos.filter((p) => p.nombre.toLowerCase().includes(t) || p.codigoSKU.toLowerCase().includes(t)))
+        } else {
+          setError(mensajeError(err))
+        }
       })
     return () => { vigente = false }
-  }, [consultaProducto])
+  }, [consultaProducto, catalogoProductos])
 
   // Solo se ofrecen los productos con existencias en la sucursal del vendedor.
   const productosDisponibles = useMemo(
@@ -262,7 +285,23 @@ export default function NuevaVentaIntegrada({ idSucursal, puedeDomicilio = true 
       })),
     }
 
+    if (esDomicilio && !navigator.onLine) {
+      return setError('Los domicilios necesitan conexión. Sin internet solo se pueden registrar ventas de mostrador.')
+    }
+    // Identifica la venta: si la conexión se corta a mitad de camino y se
+    // reintenta, el servidor no la registra dos veces.
+    const datosVenta = {
+      ...payload,
+      idCliente: seleccionCliente ? Number(seleccionCliente.idCliente) : null,
+      idOperacion: nuevoIdOperacion(),
+    }
+
     setCargando(true)
+    if (!esDomicilio && !navigator.onLine) {
+      await guardarSinConexion(datosVenta)
+      setCargando(false)
+      return
+    }
     try {
       const respuesta = esDomicilio
         ? await registrarDomicilio({
@@ -270,21 +309,59 @@ export default function NuevaVentaIntegrada({ idSucursal, puedeDomicilio = true 
           idCliente: Number(seleccionCliente.idCliente),
           direccionEntrega: direccionEntrega.trim() || null,
         })
-        : await registrarVenta({
-          ...payload,
-          idCliente: seleccionCliente ? Number(seleccionCliente.idCliente) : null,
-        })
+        : await registrarVenta(datosVenta)
       const venta = respuesta.data.data
       const idVenta = venta.idVenta
-      const factura = idVenta ? (await obtenerFactura(idVenta)).data : venta.factura
+      const factura = idVenta ? (await obtenerFactura(idVenta).then((r) => r.data).catch(() => venta.factura)) : venta.factura
       setResultado({ factura, total: venta.total ?? venta.totalVenta, idVenta, domicilio: esDomicilio })
       setCarrito([])
       setVersionInventario((version) => version + 1)
     } catch (err) {
-      setError(mensajeError(err))
+      if (esErrorDeRed(err) && !esDomicilio) await guardarSinConexion(datosVenta)
+      else setError(mensajeError(err))
     } finally {
       setCargando(false)
     }
+  }
+
+  // Guarda la venta en el dispositivo, descuenta el inventario local y entrega
+  // un comprobante provisional. Se envía sola al volver la conexión.
+  async function guardarSinConexion(datosVenta) {
+    const numero = nuevoComprobanteProvisional(idSucursal, idUsuario ?? 'u')
+    const fecha = new Date().toISOString()
+    const productos = carrito.map((item) => ({
+      nombre: item.nombre,
+      cantidad: Number(item.cantidad),
+      ...calcularLinea(item),
+    }))
+    const datos = {
+      payload: { ...datosVenta, comprobanteProvisional: numero, fechaOffline: fecha },
+      resumen: {
+        productos,
+        bruto: resumen.bruto,
+        descuento: resumen.descuento,
+        total: resumen.total,
+        metodoPago,
+        cliente: seleccionCliente
+          ? [seleccionCliente.primerNombre, seleccionCliente.primerApellido].filter(Boolean).join(' ') || seleccionCliente.nombre
+          : '',
+      },
+    }
+    try {
+      await encolarVenta(datos)
+    } catch {
+      setError('No se pudo guardar la venta en este dispositivo. Revisa que el navegador permita guardar datos.')
+      return
+    }
+    // El inventario guardado se descuenta para que la siguiente venta vea el stock real.
+    const vendido = new Map()
+    for (const { idProducto, cantidad } of datosVenta.detalles) vendido.set(idProducto, (vendido.get(idProducto) || 0) + cantidad)
+    setExistencias((actual) => new Map([...(actual || new Map())].map(([id, cant]) => [id, cant - (vendido.get(id) || 0)])))
+    await actualizarCache('/api/inventario', { sucursal: idSucursal }, (filas) => filas.map((fila) => (
+      vendido.has(fila.idProducto) ? { ...fila, cantidadDisponible: Number(fila.cantidadDisponible) - vendido.get(fila.idProducto) } : fila
+    )))
+    setComprobante({ numero, fecha, ...datos.resumen })
+    setCarrito([])
   }
 
   const campo = 'w-full rounded-md border border-[#333] bg-[#1f1f1f] px-3 py-2 text-sm text-white outline-none focus:border-[#F2B01E]'
@@ -437,6 +514,7 @@ export default function NuevaVentaIntegrada({ idSucursal, puedeDomicilio = true 
         )}
         <p className="text-lg font-semibold text-white">Total estimado: <span className="text-[#F2B01E]">{moneda.format(resumen.total)}</span></p>
         {error && <p role="alert" className="w-full text-sm text-red-400">{error}</p>}
+        {comprobante && <ComprobanteProvisional comprobante={comprobante} onCerrar={() => setComprobante(null)} />}
         {resultado && <div role="status" className="w-full border border-emerald-800 bg-emerald-950/40 p-4 text-sm text-emerald-200">
           {resultado.domicilio ? 'Domicilio registrado' : 'Venta registrada'} · Factura {resultado.factura?.numeroFactura || resultado.factura?.idFactura || 'generada'} · Total {moneda.format(resultado.factura?.total ?? resultado.total ?? 0)}
         </div>}

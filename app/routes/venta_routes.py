@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from marshmallow import ValidationError
+from sqlalchemy.exc import IntegrityError
 
 from app.schemas.venta_schema import (
     factura_detalle_output_schema,
@@ -80,12 +81,31 @@ def registrar_venta():
     except ValidationError as err:
         return jsonify({"errores_validacion": err.messages}), 400
 
+    # Reintento de una venta sin conexión que ya llegó: no se duplica.
+    existente = VentaService.buscar_por_operacion(data_validada.get("idOperacion"))
+    if existente is not None:
+        return jsonify({
+            "mensaje": "La venta ya estaba registrada.",
+            "duplicada": True,
+            "data": venta_output_schema.dump(existente),
+        }), 200
+
     try:
         nueva_venta = VentaService.registrar_venta(data_validada, _usuario_actual())
         return jsonify({
             "mensaje": "Venta procesada y factura generada con éxito.",
             "data": venta_output_schema.dump(nueva_venta)
         }), 201
+    except IntegrityError:
+        # Dos reintentos simultáneos de la misma operación: gana el primero.
+        existente = VentaService.buscar_por_operacion(data_validada.get("idOperacion"))
+        if existente is not None:
+            return jsonify({
+                "mensaje": "La venta ya estaba registrada.",
+                "duplicada": True,
+                "data": venta_output_schema.dump(existente),
+            }), 200
+        return jsonify({"mensaje": "Error al procesar la venta."}), 500
     except PermissionError as error:
         return jsonify({"mensaje": str(error)}), 403
     except ValueError as e:

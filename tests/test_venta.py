@@ -252,6 +252,78 @@ def test_solo_admin_asigna_descuento_a_producto(app):
 	assert respuesta.json["descuentoPorcentaje"] == 15
 
 
+def _token_admin(app):
+	from flask_jwt_extended import create_access_token
+
+	with app.app_context():
+		return create_access_token(identity="7", additional_claims={"rol": "admin", "idSucursal": None})
+
+
+def test_venta_sin_conexion_no_se_duplica_al_reintentar(app):
+	headers = {"Authorization": f"Bearer {_token_admin(app)}"}
+	client = app.test_client()
+	payload = payload_venta(
+		descuento=0,
+		idOperacion="7b0c4f5e-offline-0001",
+		comprobanteProvisional="OFF-1-7-0001",
+		fechaOffline="2026-10-19T15:30:00+00:00",
+	)
+
+	from datetime import datetime, timezone
+	from unittest.mock import patch
+
+	ahora = datetime(2026, 10, 20, 12, 0, tzinfo=timezone.utc)
+	with patch("app.services.venta_service.datetime") as reloj:
+		reloj.now.return_value = ahora
+		primera = client.post("/api/ventas", json=payload, headers=headers)
+		segunda = client.post("/api/ventas", json=payload, headers=headers)
+
+	assert primera.status_code == 201
+	assert segunda.status_code == 200
+	assert segunda.json["duplicada"] is True
+	assert segunda.json["data"]["idVenta"] == primera.json["data"]["idVenta"]
+	assert primera.json["data"]["comprobanteProvisional"] == "OFF-1-7-0001"
+	with app.app_context():
+		assert db.session.query(Venta).count() == 1
+		venta = db.session.query(Venta).one()
+		# Se conserva la hora real en que se vendió sin conexión.
+		assert venta.fechaHora.replace(tzinfo=None) == datetime(2026, 10, 19, 15, 30)
+		# El stock se descontó una sola vez.
+		assert db.session.get(Inventario, 1).CantidadDisponible == Decimal("8.50")
+
+
+def test_buscar_venta_por_comprobante_provisional_o_factura(app):
+	headers = {"Authorization": f"Bearer {_token_admin(app)}"}
+	client = app.test_client()
+	creada = client.post("/api/ventas", headers=headers, json=payload_venta(
+		idOperacion="op-devolucion-0001", comprobanteProvisional="OFF-1-7-0009"))
+	assert creada.status_code == 201
+	numero_factura = creada.json["data"]["factura"]["numeroFactura"]
+	client.post("/api/ventas", headers=headers, json=payload_venta())  # otra venta, no debe aparecer
+
+	por_comprobante = client.get("/api/ventas?factura=off-1-7-0009&pagina=1&por_pagina=5", headers=headers)
+	por_factura = client.get(f"/api/ventas?factura={numero_factura}&pagina=1&por_pagina=5", headers=headers)
+	inexistente = client.get("/api/ventas?factura=OFF-9-9-9999&pagina=1&por_pagina=5", headers=headers)
+
+	assert [v["idVenta"] for v in por_comprobante.json["data"]] == [creada.json["data"]["idVenta"]]
+	assert [v["idVenta"] for v in por_factura.json["data"]] == [creada.json["data"]["idVenta"]]
+	assert inexistente.json["data"] == []
+
+
+def test_venta_sin_conexion_rechaza_fechas_en_el_futuro_o_muy_viejas(app):
+	headers = {"Authorization": f"Bearer {_token_admin(app)}"}
+	client = app.test_client()
+	futura = client.post("/api/ventas", headers=headers, json=payload_venta(
+		idOperacion="op-futura-0001", fechaOffline="2999-01-01T00:00:00+00:00"))
+	vieja = client.post("/api/ventas", headers=headers, json=payload_venta(
+		idOperacion="op-vieja-00001", fechaOffline="2000-01-01T00:00:00+00:00"))
+	assert futura.status_code == 400
+	assert "futuro" in futura.json["mensaje"]
+	assert vieja.status_code == 400
+	with app.app_context():
+		assert db.session.query(Venta).count() == 0
+
+
 def test_vendedor_no_puede_vender_en_otra_sucursal(app):
 	with app.app_context():
 		data = venta_input_schema.load(payload_venta(idSucursal=2))
