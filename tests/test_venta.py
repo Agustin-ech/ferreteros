@@ -324,6 +324,23 @@ def test_venta_sin_conexion_rechaza_fechas_en_el_futuro_o_muy_viejas(app):
 		assert db.session.query(Venta).count() == 0
 
 
+def test_vendedor_no_puede_aplicar_descuento_manual(app):
+	with app.app_context():
+		# Un vendedor que envía "descuento" directo a la API (la pantalla no lo permite).
+		data = venta_input_schema.load(payload_venta(descuento=15.15))
+		with pytest.raises(PermissionError, match="administrador"):
+			VentaService.registrar_venta(data, {"id": 7, "rol": "vendedor", "sucursal_id": 1})
+		assert db.session.query(Venta).count() == 0
+		assert db.session.get(Inventario, 1).CantidadDisponible == Decimal("10.00")
+
+		# Sin descuento manual el vendedor vende normal (el descuento del producto sigue aplicando).
+		venta = VentaService.registrar_venta(
+			venta_input_schema.load(payload_venta(descuento=0)),
+			{"id": 7, "rol": "vendedor", "sucursal_id": 1},
+		)
+		assert venta.descuentoTotal == Decimal("0.00")
+
+
 def test_vendedor_no_puede_vender_en_otra_sucursal(app):
 	with app.app_context():
 		data = venta_input_schema.load(payload_venta(idSucursal=2))
@@ -513,7 +530,8 @@ def test_catalogos_y_busqueda_de_clientes_activos(app):
 
 	venta_con_cliente = client.post(
 		"/api/ventas",
-		json=payload_venta(idCliente=nuevo_cliente.json["idCliente"]),
+		# Vendedor: sin descuento manual (solo el administrador puede aplicarlo).
+		json=payload_venta(idCliente=nuevo_cliente.json["idCliente"], descuento=0),
 		headers=headers,
 	)
 	assert venta_con_cliente.status_code == 201

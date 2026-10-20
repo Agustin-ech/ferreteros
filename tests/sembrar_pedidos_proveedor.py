@@ -83,7 +83,7 @@ def _crear_app():
         (Config,),
         {
             "SQLALCHEMY_DATABASE_URI": url.set(drivername="postgresql+psycopg2"),
-            "JWT_SECRET_KEY": os.getenv("JWT_SECRET_KEY") or "clave-local-para-sembrado",
+            "JWT_SECRET_KEY": os.getenv("JWT_SECRET_KEY") or "clave-local-para-sembrado-de-pedidos-de-proveedor",
         },
     )
     return create_app(config)
