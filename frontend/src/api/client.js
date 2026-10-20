@@ -1,5 +1,6 @@
 import axios from 'axios'
 import errorMessage from './errorMessage'
+import { instalarCacheConsultas } from '../offline/cacheConsultas'
 
 export { errorMessage }
 
@@ -28,5 +29,9 @@ api.interceptors.response.use(
     return Promise.reject(error)
   },
 )
+
+// Sin internet, las consultas de inventario y catálogos responden con la
+// última copia guardada (ver src/offline).
+instalarCacheConsultas(api)
 
 export default api

@@ -3,6 +3,7 @@ import { DollarSign, FileText, Home, RefreshCw, ShoppingCart } from 'lucide-reac
 import RoleLayout from '../components/RoleLayout'
 import { crearVerificador, filtrarNavegacion, moduloDePagina, MODULOS } from '../utils/permisos'
 import api from '../api/client'
+import usePaginaHistorial from '../hooks/usePaginaHistorial'
 import Inicio from './components/Inicio'
 import ConsultarDevolucion from './components/ConsultarDevolucionIntegrada'
 import HistorialVentasIntegrado from './components/HistorialVentasIntegrado'
@@ -32,7 +33,7 @@ const moduloPorPagina = moduloDePagina(navigation)
 
 export default function VendedorApp({ usuario, onLogout }) {
   const puede = crearVerificador(usuario?.modulos)
-  const [visitaActual, setVisitaActual] = useState('inicio')
+  const [visitaActual, setVisitaActual] = usePaginaHistorial('inicio')
   const [nombreSucursal, setNombreSucursal] = useState('')
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export default function VendedorApp({ usuario, onLogout }) {
     if (!puede(moduloPorPagina[visitaActual])) return <div role="alert" className="rounded-xl border border-panel-border bg-panel-card p-6 text-sm text-gray-300">Tu rol no tiene permiso para esta sección. Pide al administrador que lo active en Roles y permisos.</div>
     switch (visitaActual) {
       case 'inicio': return <Inicio cambiarVista={setVisitaActual} />
-      case 'nueva-venta': return <NuevaVenta idSucursal={usuario?.idSucursal} puedeDomicilio={puede(MODULOS.domicilios)} />
+      case 'nueva-venta': return <NuevaVenta idSucursal={usuario?.idSucursal} idUsuario={usuario?.idUsuario} puedeDomicilio={puede(MODULOS.domicilios)} />
       case 'ventas-del-dia': return <VentasDelDia idSucursal={usuario?.idSucursal} />
       case 'filtro-ventas': return <HistorialVentasIntegrado titulo="Filtro de ventas" idSucursal={usuario?.idSucursal} />
       case 'facturas-emitidas': return <HistorialVentasIntegrado titulo="Facturas emitidas" modo="facturas" idSucursal={usuario?.idSucursal} />

@@ -11,11 +11,11 @@ Reglas que implementa:
 
 `usuario` es un dict con: id, rol ('admin' | 'vendedor' | 'bodega'), sucursal_id.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
@@ -32,6 +32,26 @@ from app.models.venta import Venta
 
 class VentaService:
     CENTAVO = Decimal("0.01")
+    # Ventas sin conexión: se aceptan hasta 7 días después (y no en el futuro).
+    MAX_ATRASO_OFFLINE = timedelta(days=7)
+    TOLERANCIA_RELOJ = timedelta(minutes=5)
+
+    @staticmethod
+    def buscar_por_operacion(id_operacion):
+        if not id_operacion:
+            return None
+        return db.session.scalar(select(Venta).where(Venta.idOperacion == id_operacion))
+
+    @staticmethod
+    def _fecha_offline(fecha):
+        if fecha is None:
+            return None
+        ahora = datetime.now(timezone.utc)
+        if fecha > ahora + VentaService.TOLERANCIA_RELOJ:
+            raise ValueError("La fecha de la venta sin conexión está en el futuro. Revisa la hora del dispositivo.")
+        if fecha < ahora - VentaService.MAX_ATRASO_OFFLINE:
+            raise ValueError("La venta sin conexión tiene más de 7 días; regístrala de nuevo o consulta al administrador.")
+        return fecha
 
     @staticmethod
     def registrar_venta(data_validada, usuario, *, confirmar=True, cargo_adicional=Decimal("0.00")):
@@ -42,6 +62,7 @@ class VentaService:
                 raise PermissionError("Solo puede registrar ventas en su sucursal asignada.")
 
         try:
+            fecha_offline = VentaService._fecha_offline(data_validada.get("fechaOffline"))
             items = data_validada["detalles"]
             cantidades_por_producto = {}
             for item in items:
@@ -154,7 +175,11 @@ class VentaService:
                 descuentoTotal=descuento,
                 costoEnvio=cargo_adicional,
                 total=total_final,
+                idOperacion=data_validada.get("idOperacion"),
+                comprobanteProvisional=data_validada.get("comprobanteProvisional"),
             )
+            if fecha_offline is not None:
+                nueva_venta.fechaHora = fecha_offline
             db.session.add(nueva_venta)
             db.session.flush()
 
@@ -219,7 +244,13 @@ class VentaService:
         if filtros.get("hasta") is not None:
             consulta = consulta.where(Venta.fechaHora < filtros["hasta"])
         if filtros.get("factura") is not None:
-            consulta = consulta.join(Factura).where(Factura.numeroFactura == filtros["factura"])
+            # Acepta el número de factura oficial o el del comprobante provisional
+            # que se entregó en una venta sin conexión (OFF-...).
+            numero = filtros["factura"].upper()
+            consulta = consulta.outerjoin(Factura).where(or_(
+                func.upper(Factura.numeroFactura) == numero,
+                func.upper(Venta.comprobanteProvisional) == numero,
+            ))
         if filtros.get("metodoPago") is not None:
             consulta = consulta.join(Venta.metodo_pago).where(
                 func.lower(MetodoPago.nombre) == filtros["metodoPago"].casefold()

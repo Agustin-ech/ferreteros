@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar'
 import Header from './components/Header'
 import ApiState from './components/ApiState'
 import api from './api/client'
+import usePaginaHistorial from './hooks/usePaginaHistorial'
 import { errorMessage } from './api/client'
 import { listarVentas, normalizarVenta } from './api/ventas'
 
@@ -94,7 +95,7 @@ const paginas = {
 }
 
 export default function AdminApp({ onLogout }) {
-  const [activePage, setActivePage] = useState('inicio')
+  const [activePage, setActivePage] = usePaginaHistorial('inicio')
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [sucursales, setSucursales] = useState([])
   const [cargandoSucursales, setCargandoSucursales] = useState(true)

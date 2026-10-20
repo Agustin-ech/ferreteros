@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BodegaProvider, useBodega } from "./store.jsx";
 import Layout, { navigation } from "./components/Layout.jsx";
+import usePaginaHistorial from "../hooks/usePaginaHistorial";
 import { crearVerificador, moduloDePagina } from "../utils/permisos";
 import Inicio from "./pages/Inicio.jsx";
 import RegistrarProducto from "./pages/RegistrarProducto.jsx";
@@ -42,7 +43,7 @@ function PaginaBodega({ Pagina, pagina, onNavigate }) {
 }
 
 export default function BodegaApp({ onLogout }) {
-  const [activePage, setActivePage] = useState("inicio");
+  const [activePage, setActivePage] = usePaginaHistorial("inicio");
   const Pagina = paginas[activePage] ?? Inicio;
 
   return (

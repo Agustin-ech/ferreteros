@@ -154,7 +154,11 @@ export default function HistorialVentasIntegrado({ titulo, soloHoy = false, modo
               {idSucursal ? 'No hay ventas para estos filtros.' : 'Asigna una sucursal al usuario para consultar sus ventas.'}
             </td></tr>}
             {!cargando && ventas.map((venta) => <tr key={venta.idVenta}>
-              <td className="py-3 pr-4 font-medium text-white">{venta.factura?.numeroFactura || `Venta #${venta.idVenta}`}</td>
+              <td className="py-3 pr-4 font-medium text-white">
+                {venta.factura?.numeroFactura || `Venta #${venta.idVenta}`}
+                {/* Venta hecha sin conexión: el cliente tiene este número en su comprobante. */}
+                {venta.comprobanteProvisional && <span className="block text-xs font-normal text-amber-300">Provisional {venta.comprobanteProvisional}</span>}
+              </td>
               <td className="pr-4">{fechaLegible(venta.fechaHora)}</td>
               <td className="pr-4">{venta.clienteNombre || (venta.idCliente ? `Cliente #${venta.idCliente}` : 'Venta sin cliente')}</td>
               {modo !== 'facturas' && <td className="pr-4">{venta.metodoPago || '—'}</td>}

@@ -32,6 +32,10 @@ class VentaInputSchema(Schema):
         required=True,
         validate=validate.Length(min=1),
     )
+    # Solo para ventas registradas sin conexión (ver Venta.idOperacion).
+    idOperacion = fields.Str(load_default=None, allow_none=True, validate=validate.Length(min=8, max=64))
+    comprobanteProvisional = fields.Str(load_default=None, allow_none=True, validate=validate.Length(max=40))
+    fechaOffline = fields.AwareDateTime(load_default=None, allow_none=True)
 
     @validates("descuento")
     def validar_descuento(self, value, **kwargs):
@@ -182,6 +186,8 @@ class VentaOutputSchema(Schema):
     descuento = fields.Float(attribute="descuentoTotal")
     costoEnvio = fields.Float()
     total = fields.Float()
+    idOperacion = fields.Str(dump_only=True)
+    comprobanteProvisional = fields.Str(dump_only=True)
     detalles = fields.List(fields.Nested(DetalleVentaOutputSchema))
     factura = fields.Nested(FacturaOutputSchema, dump_only=True)
 

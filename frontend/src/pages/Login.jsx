@@ -69,6 +69,7 @@ export default function Login({ onLogin, mensajeSesion = '' }) {
 
           <label className="block text-black">
             Contraseña
+            {/* Único botón para ver la contraseña: el propio de Edge se oculta en index.css. */}
             <div className="relative mt-1">
               <input
                 type={verClave ? 'text' : 'password'}

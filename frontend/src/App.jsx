@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import Login from './pages/Login'
 import api from './api/client'
+import { limpiarPaginaDeUrl } from './hooks/usePaginaHistorial'
 
 // Cada panel se descarga solo cuando el rol lo necesita: un vendedor no
 // baja el código del administrador ni las gráficas.
@@ -74,6 +75,9 @@ export default function App() {
       throw new Error('La cuenta no tiene un rol compatible con los paneles disponibles.')
     }
     sessionStorage.setItem('access_token', respuesta.access_token)
+    // Deja guardado el perfil: si se cae el internet y se recarga la página,
+    // la sesión se puede verificar con esta copia.
+    api.get('/api/auth/me').catch(() => {})
     setErrorVerificacion('')
     setMensajeSesion('')
     setSesion({ usuario, rol })
@@ -81,6 +85,7 @@ export default function App() {
 
   function cerrarSesion() {
     sessionStorage.removeItem('access_token')
+    limpiarPaginaDeUrl()
     setSesion(null)
     setErrorVerificacion('')
     setMensajeSesion('')

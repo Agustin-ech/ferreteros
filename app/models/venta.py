@@ -16,6 +16,11 @@ class Venta(db.Model):
     descuentoTotal= db.Column(db.Numeric(12,2), nullable=False)
     costoEnvio= db.Column(db.Numeric(12,2), nullable=False, default=0)
     total= db.Column(db.Numeric(12,2), nullable=False)
+    # Ventas hechas sin internet: el dispositivo genera `idOperacion` (UUID) para
+    # que un reintento no duplique la venta, y entrega al cliente un comprobante
+    # provisional mientras se genera la factura oficial al sincronizar.
+    idOperacion = db.Column(db.String(64), unique=True, nullable=True)
+    comprobanteProvisional = db.Column(db.String(40), nullable=True)
 
     activo = db.Column(db.Boolean, default=True, nullable=False)
     fecha_creacion = db.Column(
